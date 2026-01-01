@@ -3425,14 +3425,22 @@ async function deletePage(params) {
 
 // Batch create multiple elements
 async function createElements(params) {
-  const { elements = [] } = params || {};
+  const { elements = [], nestInFirstFrame = false, groupResult = false } = params || {};
 
   if (!elements || !Array.isArray(elements) || elements.length === 0) {
     throw new Error("Elements array is required and must not be empty");
   }
 
   const created = [];
+  const createdNodes = []; // Keep references for grouping
   const failed = [];
+  let parentFrame = null;
+  let parentFrameId = null;
+
+  // Check if first element is a frame for nesting
+  if (nestInFirstFrame && elements[0] && elements[0].type === "frame") {
+    // We'll set parentFrame after creating the first element
+  }
 
   for (let i = 0; i < elements.length; i++) {
     const el = elements[i];
@@ -3549,16 +3557,28 @@ async function createElements(params) {
         node.strokeCap = el.strokeCap;
       }
 
-      // Append to parent or current page
+      // Determine parent for this node
+      let targetParent = null;
+
       if (el.parentId) {
-        const parent = await figma.getNodeByIdAsync(el.parentId);
-        if (parent && "appendChild" in parent) {
-          parent.appendChild(node);
-        } else {
-          figma.currentPage.appendChild(node);
-        }
+        // Explicit parent ID takes priority
+        targetParent = await figma.getNodeByIdAsync(el.parentId);
+      } else if (nestInFirstFrame && i > 0 && parentFrame) {
+        // Nest in first frame (for elements after the first one)
+        targetParent = parentFrame;
+      }
+
+      // Append to determined parent or current page
+      if (targetParent && "appendChild" in targetParent) {
+        targetParent.appendChild(node);
       } else {
         figma.currentPage.appendChild(node);
+      }
+
+      // Store reference to first frame for nesting
+      if (nestInFirstFrame && i === 0 && el.type === "frame") {
+        parentFrame = node;
+        parentFrameId = node.id;
       }
 
       created.push({
@@ -3566,6 +3586,7 @@ async function createElements(params) {
         name: node.name,
         type: node.type
       });
+      createdNodes.push(node);
 
     } catch (error) {
       failed.push({
@@ -3575,11 +3596,26 @@ async function createElements(params) {
     }
   }
 
+  // Group result if requested (and not nesting in frame)
+  let groupId = null;
+  if (groupResult && createdNodes.length > 1 && !nestInFirstFrame) {
+    try {
+      const group = figma.group(createdNodes, figma.currentPage);
+      group.name = "Batch Group";
+      groupId = group.id;
+    } catch (error) {
+      // Grouping failed, but elements were still created
+      console.error("Failed to group elements:", error);
+    }
+  }
+
   return {
     created,
     failed,
     totalCreated: created.length,
-    totalFailed: failed.length
+    totalFailed: failed.length,
+    parentFrameId,
+    groupId
   };
 }
 

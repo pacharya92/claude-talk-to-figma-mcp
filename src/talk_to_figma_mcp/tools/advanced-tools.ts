@@ -52,23 +52,37 @@ export function registerAdvancedTools(server: McpServer): void {
 
   server.tool(
     "create_elements",
-    "Create multiple elements in Figma in a single batch operation. Much faster than creating elements one by one.",
+    "Create multiple elements in Figma in a single batch operation. Much faster than creating elements one by one. Use nestInFirstFrame to automatically nest all elements inside the first frame.",
     {
       elements: z.array(elementSchema).min(1).max(100).describe("Array of elements to create (max 100)"),
+      nestInFirstFrame: z.boolean().optional().describe("If true and first element is a frame, all subsequent elements are created as children of that frame (recommended for building components)"),
+      groupResult: z.boolean().optional().describe("If true, group all created elements together after creation"),
     },
-    async ({ elements }) => {
+    async ({ elements, nestInFirstFrame, groupResult }) => {
       try {
-        const result = await sendCommandToFigma("create_elements", { elements });
+        const result = await sendCommandToFigma("create_elements", {
+          elements,
+          nestInFirstFrame: nestInFirstFrame ?? false,
+          groupResult: groupResult ?? false
+        });
         const typedResult = result as {
           created: Array<{ id: string; name: string; type: string }>;
           failed: Array<{ index: number; error: string }>;
           totalCreated: number;
           totalFailed: number;
+          groupId?: string;
+          parentFrameId?: string;
         };
 
         let message = `Created ${typedResult.totalCreated} elements successfully.`;
         if (typedResult.totalFailed > 0) {
           message += ` ${typedResult.totalFailed} failed.`;
+        }
+        if (typedResult.parentFrameId) {
+          message += ` All elements nested in frame ${typedResult.parentFrameId}.`;
+        }
+        if (typedResult.groupId) {
+          message += ` Elements grouped with ID: ${typedResult.groupId}.`;
         }
 
         const createdList = typedResult.created
