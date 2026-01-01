@@ -197,6 +197,23 @@ async function handleCommand(command, params) {
       return await setCurrentPage(params);
     case "delete_page":
       return await deletePage(params);
+    // Advanced tools - batch, gradients, layer ordering, viewport
+    case "create_elements":
+      return await createElements(params);
+    case "set_gradient_fill":
+      return await setGradientFill(params);
+    case "set_layer_order":
+      return await setLayerOrder(params);
+    case "zoom_to_node":
+      return await zoomToNode(params);
+    case "zoom_to_fit":
+      return await zoomToFit(params);
+    case "set_viewport":
+      return await setViewport(params);
+    case "get_viewport":
+      return await getViewport();
+    case "select_nodes":
+      return await selectNodes(params);
     default:
       throw new Error(`Unknown command: ${command}`);
   }
@@ -3399,5 +3416,400 @@ async function deletePage(params) {
     success: true,
     deletedPageId: pageId,
     deletedPageName: pageName
+  };
+}
+
+// ============================================
+// ADVANCED TOOLS - Batch, Gradients, Layer Ordering, Viewport
+// ============================================
+
+// Batch create multiple elements
+async function createElements(params) {
+  const { elements = [] } = params || {};
+
+  if (!elements || !Array.isArray(elements) || elements.length === 0) {
+    throw new Error("Elements array is required and must not be empty");
+  }
+
+  const created = [];
+  const failed = [];
+
+  for (let i = 0; i < elements.length; i++) {
+    const el = elements[i];
+    try {
+      let node;
+
+      switch (el.type) {
+        case "rectangle":
+          node = figma.createRectangle();
+          node.x = el.x || 0;
+          node.y = el.y || 0;
+          node.resize(el.width || 100, el.height || 100);
+          if (el.cornerRadius) {
+            node.cornerRadius = el.cornerRadius;
+          }
+          break;
+
+        case "frame":
+          node = figma.createFrame();
+          node.x = el.x || 0;
+          node.y = el.y || 0;
+          node.resize(el.width || 100, el.height || 100);
+          if (el.cornerRadius) {
+            node.cornerRadius = el.cornerRadius;
+          }
+          break;
+
+        case "ellipse":
+          node = figma.createEllipse();
+          node.x = el.x || 0;
+          node.y = el.y || 0;
+          node.resize(el.width || 100, el.height || 100);
+          break;
+
+        case "text":
+          node = figma.createText();
+          await figma.loadFontAsync({ family: "Inter", style: "Regular" });
+          node.x = el.x || 0;
+          node.y = el.y || 0;
+          node.characters = el.text || "Text";
+          if (el.fontSize) {
+            node.fontSize = el.fontSize;
+          }
+          if (el.fontWeight) {
+            const style = el.fontWeight >= 700 ? "Bold" : el.fontWeight >= 500 ? "Medium" : "Regular";
+            await figma.loadFontAsync({ family: "Inter", style });
+            node.fontName = { family: "Inter", style };
+          }
+          break;
+
+        case "line":
+          node = figma.createVector();
+          const x1 = el.x || 0;
+          const y1 = el.y || 0;
+          const x2 = el.x2 !== undefined ? el.x2 : x1 + 100;
+          const y2 = el.y2 !== undefined ? el.y2 : y1;
+
+          node.x = Math.min(x1, x2);
+          node.y = Math.min(y1, y2);
+
+          const width = Math.abs(x2 - x1) || 1;
+          const height = Math.abs(y2 - y1) || 1;
+          node.resize(width, height);
+
+          const dx = x2 - x1;
+          const dy = y2 - y1;
+          const endX = dx >= 0 ? width : 0;
+          const endY = dy >= 0 ? height : 0;
+          const startX = dx >= 0 ? 0 : width;
+          const startY = dy >= 0 ? 0 : height;
+
+          node.vectorPaths = [{
+            windingRule: "NONZERO",
+            data: `M ${startX} ${startY} L ${endX} ${endY}`
+          }];
+          node.fills = [];
+          break;
+
+        default:
+          throw new Error(`Unknown element type: ${el.type}`);
+      }
+
+      node.name = el.name || `${el.type}-${i}`;
+
+      // Apply fill color
+      if (el.fillColor && node.fills !== undefined) {
+        node.fills = [{
+          type: "SOLID",
+          color: {
+            r: el.fillColor.r || 0,
+            g: el.fillColor.g || 0,
+            b: el.fillColor.b || 0
+          },
+          opacity: el.fillColor.a !== undefined ? el.fillColor.a : 1
+        }];
+      }
+
+      // Apply stroke
+      if (el.strokeColor) {
+        node.strokes = [{
+          type: "SOLID",
+          color: {
+            r: el.strokeColor.r || 0,
+            g: el.strokeColor.g || 0,
+            b: el.strokeColor.b || 0
+          },
+          opacity: el.strokeColor.a !== undefined ? el.strokeColor.a : 1
+        }];
+        node.strokeWeight = el.strokeWeight || 1;
+      }
+
+      // Apply stroke cap for lines
+      if (el.type === "line" && el.strokeCap) {
+        node.strokeCap = el.strokeCap;
+      }
+
+      // Append to parent or current page
+      if (el.parentId) {
+        const parent = await figma.getNodeByIdAsync(el.parentId);
+        if (parent && "appendChild" in parent) {
+          parent.appendChild(node);
+        } else {
+          figma.currentPage.appendChild(node);
+        }
+      } else {
+        figma.currentPage.appendChild(node);
+      }
+
+      created.push({
+        id: node.id,
+        name: node.name,
+        type: node.type
+      });
+
+    } catch (error) {
+      failed.push({
+        index: i,
+        error: error.message || String(error)
+      });
+    }
+  }
+
+  return {
+    created,
+    failed,
+    totalCreated: created.length,
+    totalFailed: failed.length
+  };
+}
+
+// Set gradient fill on a node
+async function setGradientFill(params) {
+  const { nodeId, gradientType, stops, angle = 0 } = params || {};
+
+  if (!nodeId) throw new Error("Missing nodeId parameter");
+  if (!gradientType) throw new Error("Missing gradientType parameter");
+  if (!stops || !Array.isArray(stops) || stops.length < 2) {
+    throw new Error("At least 2 gradient stops are required");
+  }
+
+  const node = await figma.getNodeByIdAsync(nodeId);
+  if (!node) throw new Error(`Node not found: ${nodeId}`);
+  if (!("fills" in node)) throw new Error("Node does not support fills");
+
+  // Convert angle to transform matrix for linear gradient
+  // Figma uses a 2D transformation matrix for gradient positioning
+  const angleRad = (angle * Math.PI) / 180;
+  const cos = Math.cos(angleRad);
+  const sin = Math.sin(angleRad);
+
+  // Create gradient stops
+  const gradientStops = stops.map(stop => ({
+    position: stop.position,
+    color: {
+      r: stop.color.r || 0,
+      g: stop.color.g || 0,
+      b: stop.color.b || 0,
+      a: stop.color.a !== undefined ? stop.color.a : 1
+    }
+  }));
+
+  // Create the gradient fill
+  const gradientFill = {
+    type: `GRADIENT_${gradientType}`,
+    gradientStops,
+    gradientTransform: [
+      [cos, sin, 0.5 - cos * 0.5 - sin * 0.5],
+      [-sin, cos, 0.5 + sin * 0.5 - cos * 0.5]
+    ]
+  };
+
+  node.fills = [gradientFill];
+
+  return {
+    name: node.name,
+    id: node.id,
+    gradientType,
+    stopsCount: stops.length
+  };
+}
+
+// Set layer order (bring to front, send to back, etc.)
+async function setLayerOrder(params) {
+  const { nodeId, order } = params || {};
+
+  if (!nodeId) throw new Error("Missing nodeId parameter");
+  if (!order) throw new Error("Missing order parameter");
+
+  const node = await figma.getNodeByIdAsync(nodeId);
+  if (!node) throw new Error(`Node not found: ${nodeId}`);
+
+  const parent = node.parent;
+  if (!parent || !("children" in parent)) {
+    throw new Error("Node has no parent with children");
+  }
+
+  const siblings = parent.children;
+  const currentIndex = siblings.indexOf(node);
+  let newIndex;
+
+  switch (order) {
+    case "FRONT":
+      // Move to end (top of layer stack)
+      parent.appendChild(node);
+      newIndex = siblings.length - 1;
+      break;
+
+    case "BACK":
+      // Move to beginning (bottom of layer stack)
+      parent.insertChild(0, node);
+      newIndex = 0;
+      break;
+
+    case "FORWARD":
+      // Move up one position
+      if (currentIndex < siblings.length - 1) {
+        parent.insertChild(currentIndex + 2, node);
+        newIndex = currentIndex + 1;
+      } else {
+        newIndex = currentIndex;
+      }
+      break;
+
+    case "BACKWARD":
+      // Move down one position
+      if (currentIndex > 0) {
+        parent.insertChild(currentIndex - 1, node);
+        newIndex = currentIndex - 1;
+      } else {
+        newIndex = currentIndex;
+      }
+      break;
+
+    default:
+      throw new Error(`Unknown order: ${order}`);
+  }
+
+  return {
+    name: node.name,
+    id: node.id,
+    newIndex,
+    order
+  };
+}
+
+// Zoom viewport to focus on a specific node
+async function zoomToNode(params) {
+  const { nodeId } = params || {};
+
+  if (!nodeId) throw new Error("Missing nodeId parameter");
+
+  const node = await figma.getNodeByIdAsync(nodeId);
+  if (!node) throw new Error(`Node not found: ${nodeId}`);
+
+  // Scroll and zoom to the node
+  figma.viewport.scrollAndZoomIntoView([node]);
+
+  return {
+    name: node.name,
+    id: node.id,
+    zoom: figma.viewport.zoom
+  };
+}
+
+// Zoom viewport to fit nodes or all content
+async function zoomToFit(params) {
+  const { nodeIds } = params || {};
+
+  let nodesToFit = [];
+
+  if (nodeIds && Array.isArray(nodeIds) && nodeIds.length > 0) {
+    // Fit specific nodes
+    for (const id of nodeIds) {
+      const node = await figma.getNodeByIdAsync(id);
+      if (node) {
+        nodesToFit.push(node);
+      }
+    }
+  } else {
+    // Fit all content on current page
+    nodesToFit = figma.currentPage.children;
+  }
+
+  if (nodesToFit.length === 0) {
+    throw new Error("No nodes to fit in viewport");
+  }
+
+  figma.viewport.scrollAndZoomIntoView(nodesToFit);
+
+  return {
+    zoom: figma.viewport.zoom,
+    nodeCount: nodesToFit.length
+  };
+}
+
+// Set viewport position and zoom
+async function setViewport(params) {
+  const { x, y, zoom } = params || {};
+
+  if (x === undefined || y === undefined) {
+    throw new Error("Missing x or y parameter");
+  }
+  if (zoom === undefined) {
+    throw new Error("Missing zoom parameter");
+  }
+
+  figma.viewport.center = { x, y };
+  figma.viewport.zoom = zoom;
+
+  return {
+    x: figma.viewport.center.x,
+    y: figma.viewport.center.y,
+    zoom: figma.viewport.zoom
+  };
+}
+
+// Get current viewport state
+async function getViewport() {
+  const bounds = figma.viewport.bounds;
+
+  return {
+    x: figma.viewport.center.x,
+    y: figma.viewport.center.y,
+    zoom: figma.viewport.zoom,
+    width: bounds.width,
+    height: bounds.height
+  };
+}
+
+// Select nodes by IDs
+async function selectNodes(params) {
+  const { nodeIds } = params || {};
+
+  if (!nodeIds || !Array.isArray(nodeIds) || nodeIds.length === 0) {
+    throw new Error("nodeIds array is required and must not be empty");
+  }
+
+  const nodesToSelect = [];
+
+  for (const id of nodeIds) {
+    const node = await figma.getNodeByIdAsync(id);
+    if (node && "id" in node) {
+      nodesToSelect.push(node);
+    }
+  }
+
+  if (nodesToSelect.length === 0) {
+    throw new Error("No valid nodes found to select");
+  }
+
+  figma.currentPage.selection = nodesToSelect;
+
+  return {
+    selectedCount: nodesToSelect.length,
+    nodes: nodesToSelect.map(n => ({
+      id: n.id,
+      name: n.name
+    }))
   };
 }
