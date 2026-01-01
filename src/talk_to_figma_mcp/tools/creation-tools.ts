@@ -590,13 +590,13 @@ export function registerCreationTools(server: McpServer): void {
     async ({ nodeId }) => {
       try {
         const result = await sendCommandToFigma("flatten_node", { nodeId });
-        
-        const typedResult = result as { 
-          id: string, 
-          name: string, 
-          type: string 
+
+        const typedResult = result as {
+          id: string,
+          name: string,
+          type: string
         };
-        
+
         return {
           content: [
             {
@@ -611,6 +611,162 @@ export function registerCreationTools(server: McpServer): void {
             {
               type: "text",
               text: `Error flattening node: ${error instanceof Error ? error.message : String(error)}`
+            }
+          ]
+        };
+      }
+    }
+  );
+
+  // Create Page Tool
+  server.tool(
+    "create_page",
+    "Create a new page in the Figma document",
+    {
+      name: z.string().optional().describe("Name for the new page (default: 'New Page')"),
+    },
+    async ({ name }) => {
+      try {
+        const result = await sendCommandToFigma("create_page", { name });
+
+        const typedResult = result as {
+          id: string,
+          name: string,
+          type: string,
+          childCount: number
+        };
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Created page "${typedResult.name}" with ID: ${typedResult.id}`
+            }
+          ]
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Error creating page: ${error instanceof Error ? error.message : String(error)}`
+            }
+          ]
+        };
+      }
+    }
+  );
+
+  // Get Pages Tool
+  server.tool(
+    "get_pages",
+    "Get all pages in the Figma document",
+    {},
+    async () => {
+      try {
+        const result = await sendCommandToFigma("get_pages", {});
+
+        const typedResult = result as {
+          pages: Array<{ id: string, name: string, type: string, childCount: number, isCurrent: boolean }>,
+          currentPageId: string,
+          totalPages: number
+        };
+
+        const pageList = typedResult.pages.map(p =>
+          `- ${p.name} (ID: ${p.id})${p.isCurrent ? ' [CURRENT]' : ''} - ${p.childCount} children`
+        ).join('\n');
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Found ${typedResult.totalPages} pages:\n${pageList}`
+            }
+          ]
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Error getting pages: ${error instanceof Error ? error.message : String(error)}`
+            }
+          ]
+        };
+      }
+    }
+  );
+
+  // Set Current Page Tool
+  server.tool(
+    "set_current_page",
+    "Switch to a different page in the Figma document",
+    {
+      pageId: z.string().describe("ID of the page to switch to"),
+    },
+    async ({ pageId }) => {
+      try {
+        const result = await sendCommandToFigma("set_current_page", { pageId });
+
+        const typedResult = result as {
+          id: string,
+          name: string,
+          type: string,
+          success: boolean
+        };
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Switched to page "${typedResult.name}" (ID: ${typedResult.id})`
+            }
+          ]
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Error switching page: ${error instanceof Error ? error.message : String(error)}`
+            }
+          ]
+        };
+      }
+    }
+  );
+
+  // Delete Page Tool
+  server.tool(
+    "delete_page",
+    "Delete a page from the Figma document (cannot delete the last page)",
+    {
+      pageId: z.string().describe("ID of the page to delete"),
+    },
+    async ({ pageId }) => {
+      try {
+        const result = await sendCommandToFigma("delete_page", { pageId });
+
+        const typedResult = result as {
+          success: boolean,
+          deletedPageId: string,
+          deletedPageName: string
+        };
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Deleted page "${typedResult.deletedPageName}" (ID: ${typedResult.deletedPageId})`
+            }
+          ]
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Error deleting page: ${error instanceof Error ? error.message : String(error)}`
             }
           ]
         };

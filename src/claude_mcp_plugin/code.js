@@ -189,6 +189,14 @@ async function handleCommand(command, params) {
       return await createVector(params);
     case "create_line":
       return await createLine(params);
+    case "create_page":
+      return await createPage(params);
+    case "get_pages":
+      return await getPages();
+    case "set_current_page":
+      return await setCurrentPage(params);
+    case "delete_page":
+      return await deletePage(params);
     default:
       throw new Error(`Unknown command: ${command}`);
   }
@@ -3291,5 +3299,105 @@ async function createLine(params) {
     strokes: line.strokes,
     vectorPaths: line.vectorPaths,
     parentId: line.parent ? line.parent.id : undefined
+  };
+}
+
+// Page management functions
+
+async function createPage(params) {
+  const { name = "New Page" } = params || {};
+
+  const page = figma.createPage();
+  page.name = name;
+
+  return {
+    id: page.id,
+    name: page.name,
+    type: page.type,
+    childCount: page.children.length
+  };
+}
+
+async function getPages() {
+  const pages = figma.root.children;
+
+  return {
+    pages: pages.map(page => ({
+      id: page.id,
+      name: page.name,
+      type: page.type,
+      childCount: page.children.length,
+      isCurrent: page.id === figma.currentPage.id
+    })),
+    currentPageId: figma.currentPage.id,
+    totalPages: pages.length
+  };
+}
+
+async function setCurrentPage(params) {
+  const { pageId } = params || {};
+
+  if (!pageId) {
+    throw new Error("Missing pageId parameter");
+  }
+
+  const page = await figma.getNodeByIdAsync(pageId);
+
+  if (!page) {
+    throw new Error(`Page not found with ID: ${pageId}`);
+  }
+
+  if (page.type !== "PAGE") {
+    throw new Error(`Node is not a page: ${pageId}`);
+  }
+
+  figma.currentPage = page;
+
+  return {
+    id: page.id,
+    name: page.name,
+    type: page.type,
+    success: true
+  };
+}
+
+async function deletePage(params) {
+  const { pageId } = params || {};
+
+  if (!pageId) {
+    throw new Error("Missing pageId parameter");
+  }
+
+  // Cannot delete the last page
+  if (figma.root.children.length <= 1) {
+    throw new Error("Cannot delete the last page in the document");
+  }
+
+  const page = await figma.getNodeByIdAsync(pageId);
+
+  if (!page) {
+    throw new Error(`Page not found with ID: ${pageId}`);
+  }
+
+  if (page.type !== "PAGE") {
+    throw new Error(`Node is not a page: ${pageId}`);
+  }
+
+  const pageName = page.name;
+
+  // If deleting current page, switch to another page first
+  if (figma.currentPage.id === pageId) {
+    const otherPage = figma.root.children.find(p => p.id !== pageId);
+    if (otherPage) {
+      figma.currentPage = otherPage;
+    }
+  }
+
+  page.remove();
+
+  return {
+    success: true,
+    deletedPageId: pageId,
+    deletedPageName: pageName
   };
 }
