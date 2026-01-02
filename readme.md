@@ -1,10 +1,51 @@
 <img src="images/claude-talk-to-figma.png" alt="Claude Talk to Figma collage" />
 
-# Claude Talk to Figma MCP
+# Claude Talk to Figma MCP (Fork)
+
+> **This is a fork of [arinspunk/claude-talk-to-figma-mcp](https://github.com/arinspunk/claude-talk-to-figma-mcp)** with additional tools for high-level UI component creation and advanced Figma operations.
 
 A Model Context Protocol (MCP) plugin that allows Claude Desktop and other AI tools (GitHub Copilot, Cursor, etc.) to interact directly with Figma, enabling powerful AI-assisted design capabilities.
 
-> **Important**: This project is based on [cursor-talk-to-figma-mcp](https://github.com/sonnylazuardi/cursor-talk-to-figma-mcp) by Sonny Lazuardi. It has been adapted to work with Claude Desktop and expanded with additional tools. Original credit belongs to Sonny Lazuardi ❤️
+---
+
+## What This Fork Adds
+
+### High-Level UI Component Tools
+
+These tools create complete, styled UI components in a single call:
+
+| Tool | Description |
+|------|-------------|
+| `create_button` | Button with variants (primary, secondary, outline, ghost, danger) and sizes (sm, md, lg) |
+| `create_input` | Form input with label, placeholder, and states (default, focused, error, disabled) |
+| `create_card` | Card container with padding, border-radius, and optional shadow |
+| `create_avatar` | Circular avatar placeholder with sizes (xs, sm, md, lg, xl) and initials |
+| `create_badge` | Status badges with variants (default, success, warning, error, info) |
+| `create_icon_placeholder` | Square placeholder for icons |
+| `create_divider` | Horizontal or vertical divider lines |
+
+### Advanced Tools
+
+| Tool | Description |
+|------|-------------|
+| `create_elements` | Batch create up to 100 elements in one call with `nestInFirstFrame` and `groupResult` options |
+| `create_line` | Create lines and arrows with strokeCap options |
+| `set_gradient_fill` | Apply LINEAR, RADIAL, ANGULAR, or DIAMOND gradients |
+| `set_layer_order` | Control layer order (FRONT, BACK, FORWARD, BACKWARD) |
+| `zoom_to_node` | Focus viewport on a specific element |
+| `zoom_to_fit` | Fit viewport to elements or all content |
+| `set_viewport` | Set exact viewport position and zoom level |
+| `get_viewport` | Get current viewport state |
+| `select_nodes` | Programmatically select nodes |
+
+### Project Enhancements
+
+- **CLAUDE.md** - Design tokens (colors, spacing, typography) and usage instructions for AI assistants
+- **.nvmrc** - Consistent Node.js version management
+
+---
+
+> **Original Credits**: Based on [cursor-talk-to-figma-mcp](https://github.com/sonnylazuardi/cursor-talk-to-figma-mcp) by Sonny Lazuardi, adapted for Claude Desktop by [Xúlio Zé](https://github.com/arinspunk)
 
 ## ⚡ Installation
 
