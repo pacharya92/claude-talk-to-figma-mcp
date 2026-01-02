@@ -138,6 +138,62 @@ Creates a small badge/tag for labels and status indicators.
 ### `create_icon_placeholder`
 Creates a square placeholder for icons.
 
+### `set_image_fill`
+Applies an image from a URL as a fill to any shape node.
+- Works with any public image URL (Unsplash, Pexels, etc.)
+- Scale modes: `FILL`, `FIT`, `CROP`, `TILE`
+
+## Image Integration with Unsplash
+
+You can use real images in your Figma designs by combining an Unsplash MCP server with the `set_image_fill` tool.
+
+### Recommended Setup
+
+Add an Unsplash MCP server to your Claude config:
+
+```json
+{
+  "mcpServers": {
+    "unsplash": {
+      "command": "npx",
+      "args": ["-y", "@anthropic-community/mcp-unsplash"]
+    }
+  }
+}
+```
+
+Or use the scraping-based version (no API key needed):
+```json
+{
+  "mcpServers": {
+    "unsplash": {
+      "command": "npx",
+      "args": ["-y", "unsplash-mcp"]
+    }
+  }
+}
+```
+
+### Example Workflow
+
+```
+1. Create a rectangle: create_rectangle(x: 0, y: 0, width: 400, height: 300)
+2. Search Unsplash: search_images("mountain landscape") → get URL
+3. Apply image: set_image_fill(nodeId: "123:456", imageUrl: "https://images.unsplash.com/...")
+```
+
+### Direct URL Usage
+
+You can also use any public image URL directly:
+
+```javascript
+set_image_fill({
+  nodeId: "123:456",
+  imageUrl: "https://images.unsplash.com/photo-xxx?w=800",
+  scaleMode: "FILL"  // or FIT, CROP, TILE
+})
+```
+
 ## UI Pattern Examples
 
 ### Login Screen

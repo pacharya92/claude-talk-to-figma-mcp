@@ -345,6 +345,55 @@ export function registerDocumentTools(server: McpServer): void {
     }
   );
 
+  // Set Image Fill Tool
+  server.tool(
+    "set_image_fill",
+    "Set an image fill on a node from a URL. Fetches the image and applies it as a fill to the specified node. Works great with Unsplash URLs or any public image URL.",
+    {
+      nodeId: z.string().describe("The ID of the node to apply the image fill to"),
+      imageUrl: z.string().url().describe("The URL of the image to fetch and apply as a fill"),
+      scaleMode: z
+        .enum(["FILL", "FIT", "CROP", "TILE"])
+        .optional()
+        .describe("How the image should be scaled to fit the node (default: FILL)"),
+    },
+    async ({ nodeId, imageUrl, scaleMode }) => {
+      try {
+        const result = await sendCommandToFigma("set_image_fill", {
+          nodeId,
+          imageUrl,
+          scaleMode: scaleMode || "FILL",
+        }, 30000); // 30 second timeout for image fetching
+
+        const typedResult = result as {
+          success: boolean;
+          nodeId: string;
+          nodeName: string;
+          imageHash: string;
+          message: string;
+        };
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: typedResult.message || `Applied image fill to node ${typedResult.nodeName}`,
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Error setting image fill: ${error instanceof Error ? error.message : String(error)}`,
+            },
+          ],
+        };
+      }
+    }
+  );
+
   // Export Node as Image Tool
   server.tool(
     "export_node_as_image",

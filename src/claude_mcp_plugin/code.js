@@ -233,6 +233,9 @@ async function handleCommand(command, params) {
       return await renderHtml(params);
     case "create_login_screen":
       return await createLoginScreen(params);
+    // Image fill command (receives pre-fetched image bytes from UI)
+    case "apply_image_fill":
+      return await applyImageFill(params);
     default:
       throw new Error(`Unknown command: ${command}`);
   }
@@ -4482,22 +4485,44 @@ async function renderHtml(params) {
 
   // Send the HTML to ui.html for conversion to LayerNodes
   return new Promise((resolve, reject) => {
+    let isComplete = false;
+    let timeoutId = null;
+
+    // Helper to safely remove frame
+    const safeRemoveFrame = () => {
+      try {
+        if (baseFrame && baseFrame.parent) {
+          baseFrame.remove();
+        }
+      } catch (e) {
+        console.warn("Could not remove frame:", e);
+      }
+    };
+
     // Set up a one-time message handler
     const messageHandler = async (msg) => {
       if (msg.type === "html-layers-result") {
+        if (isComplete) return; // Already handled
+        isComplete = true;
+
+        // Clear timeout
+        if (timeoutId) clearTimeout(timeoutId);
+
         // Remove this handler
         figma.ui.off("message", messageHandler);
 
         if (msg.error) {
-          baseFrame.remove();
+          safeRemoveFrame();
           reject(new Error(msg.error));
           return;
         }
 
         try {
           const layers = msg.layers;
+          console.log("Received layers:", JSON.stringify(layers).slice(0, 500));
+
           if (!layers || (Array.isArray(layers) && layers.length === 0)) {
-            baseFrame.remove();
+            safeRemoveFrame();
             reject(new Error("No layers generated from HTML"));
             return;
           }
@@ -4529,7 +4554,8 @@ async function renderHtml(params) {
             frameName: baseFrame.name,
           });
         } catch (err) {
-          baseFrame.remove();
+          console.error("Error processing layers:", err);
+          safeRemoveFrame();
           reject(err);
         }
       }
@@ -4538,6 +4564,7 @@ async function renderHtml(params) {
     figma.ui.on("message", messageHandler);
 
     // Request conversion from ui.html
+    console.log("Sending convert-html to UI");
     figma.ui.postMessage({
       type: "convert-html",
       html: html,
@@ -4545,9 +4572,11 @@ async function renderHtml(params) {
     });
 
     // Timeout after 30 seconds
-    setTimeout(() => {
+    timeoutId = setTimeout(() => {
+      if (isComplete) return; // Already handled
+      isComplete = true;
       figma.ui.off("message", messageHandler);
-      baseFrame.remove();
+      safeRemoveFrame();
       reject(new Error("HTML to Figma conversion timed out"));
     }, 30000);
   });
@@ -5097,4 +5126,56 @@ async function createInputField({ label, placeholder, width, colors, isPassword 
   fieldContainer.appendChild(inputBox);
 
   return fieldContainer;
+}
+
+// Apply an image fill to a node from pre-fetched image bytes
+async function applyImageFill(params) {
+  const { nodeId, imageBytes, scaleMode = "FILL" } = params;
+
+  if (!nodeId) {
+    throw new Error("Missing required parameter: nodeId");
+  }
+
+  if (!imageBytes || !Array.isArray(imageBytes)) {
+    throw new Error("Missing or invalid imageBytes parameter");
+  }
+
+  // Find the node
+  const node = await figma.getNodeByIdAsync(nodeId);
+  if (!node) {
+    throw new Error(`Node not found: ${nodeId}`);
+  }
+
+  // Check if node supports fills
+  if (!("fills" in node)) {
+    throw new Error(`Node type ${node.type} does not support fills`);
+  }
+
+  try {
+    // Convert array back to Uint8Array
+    const uint8Array = new Uint8Array(imageBytes);
+
+    // Create image from bytes
+    const image = figma.createImage(uint8Array);
+
+    // Create image fill paint
+    const imageFill = {
+      type: "IMAGE",
+      scaleMode: scaleMode, // FILL, FIT, CROP, TILE
+      imageHash: image.hash,
+    };
+
+    // Apply the fill
+    node.fills = [imageFill];
+
+    return {
+      success: true,
+      nodeId: node.id,
+      nodeName: node.name,
+      imageHash: image.hash,
+      message: `Applied image fill to ${node.name}`,
+    };
+  } catch (error) {
+    throw new Error(`Failed to apply image fill: ${error.message}`);
+  }
 }
