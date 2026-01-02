@@ -1,15 +1,22 @@
 import { z } from "zod";
 
-// Argumentos de línea de comandos
+// Command line arguments
 const args = process.argv.slice(2);
 const serverArg = args.find(arg => arg.startsWith('--server='));
 const portArg = args.find(arg => arg.startsWith('--port='));
 const reconnectArg = args.find(arg => arg.startsWith('--reconnect-interval='));
 
-// Configuración de conexión extraída de argumentos CLI
+// Connection configuration from CLI arguments
 export const serverUrl = serverArg ? serverArg.split('=')[1] : 'localhost';
 export const defaultPort = portArg ? parseInt(portArg.split('=')[1], 10) : 3055;
 export const reconnectInterval = reconnectArg ? parseInt(reconnectArg.split('=')[1], 10) : 2000;
+
+// Timeout configuration (in milliseconds)
+export const TIMEOUTS = {
+  connection: 15000,      // 15s - WebSocket connection timeout
+  request: 60000,         // 60s - Default request timeout (was 30s)
+  inactivity: 120000,     // 120s - Inactivity timeout for long operations (was 60s)
+};
 
 // URL de WebSocket basada en el servidor (WS para localhost, WSS para remoto)
 export const WS_URL = serverUrl === 'localhost' ? `ws://${serverUrl}` : `wss://${serverUrl}`;

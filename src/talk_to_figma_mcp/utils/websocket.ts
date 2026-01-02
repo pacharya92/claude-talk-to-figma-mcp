@@ -1,7 +1,7 @@
 import WebSocket from "ws";
 import { v4 as uuidv4 } from "uuid";
 import { logger } from "./logger";
-import { serverUrl, defaultPort, WS_URL, reconnectInterval } from "../config/config";
+import { serverUrl, defaultPort, WS_URL, reconnectInterval, TIMEOUTS } from "../config/config";
 import { FigmaCommand, FigmaResponse, CommandProgressUpdate, PendingRequest, ProgressMessage } from "../types";
 
 // WebSocket connection and request tracking
@@ -46,7 +46,7 @@ export function connectToFigma(port: number = defaultPort) {
         logger.error('Connection to Figma timed out');
         ws.terminate();
       }
-    }, 10000); // 10 second connection timeout
+    }, TIMEOUTS.connection);
     
     ws.on('open', () => {
       clearTimeout(connectionTimeout);
@@ -80,7 +80,7 @@ export function connectToFigma(port: number = defaultPort) {
                 pendingRequests.delete(requestId);
                 request.reject(new Error('Request to Figma timed out'));
               }
-            }, 60000); // 60 second timeout for inactivity
+            }, TIMEOUTS.inactivity);
 
             // Log progress
             logger.info(`Progress update for ${progressData.commandType}: ${progressData.progress}% - ${progressData.message}`);
@@ -199,7 +199,7 @@ export function getCurrentChannel(): string | null {
 export function sendCommandToFigma(
   command: FigmaCommand,
   params: unknown = {},
-  timeoutMs: number = 30000
+  timeoutMs: number = TIMEOUTS.request
 ): Promise<unknown> {
   return new Promise((resolve, reject) => {
     // If not connected, try to connect first

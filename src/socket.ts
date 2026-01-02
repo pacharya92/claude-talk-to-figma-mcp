@@ -108,7 +108,76 @@ const server = Bun.serve({
       return new Response(JSON.stringify({
         status: "running",
         uptime: process.uptime(),
-        stats
+        stats,
+        channels: Array.from(channels.entries()).map(([name, clients]) => ({
+          name,
+          clients: clients.size
+        }))
+      }), {
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*"
+        }
+      });
+    }
+
+    // Handle purge endpoint - close all stale connections
+    if (url.pathname === "/purge") {
+      let purgedCount = 0;
+      let closedChannels: string[] = [];
+
+      channels.forEach((clients, channelName) => {
+        clients.forEach((client) => {
+          if (client.readyState !== WebSocket.OPEN) {
+            clients.delete(client);
+            purgedCount++;
+          }
+        });
+        // Remove empty channels
+        if (clients.size === 0) {
+          channels.delete(channelName);
+          closedChannels.push(channelName);
+        }
+      });
+
+      logger.info(`Purged ${purgedCount} stale connections, removed ${closedChannels.length} empty channels`);
+
+      return new Response(JSON.stringify({
+        purged: purgedCount,
+        closedChannels,
+        remainingChannels: channels.size,
+        activeConnections: stats.activeConnections
+      }), {
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*"
+        }
+      });
+    }
+
+    // Handle reset endpoint - close ALL connections and clear channels
+    if (url.pathname === "/reset") {
+      let closedCount = 0;
+
+      channels.forEach((clients, channelName) => {
+        clients.forEach((client) => {
+          try {
+            client.close(1000, "Server reset requested");
+            closedCount++;
+          } catch (e) {
+            // Ignore close errors
+          }
+        });
+      });
+
+      channels.clear();
+      stats.activeConnections = 0;
+
+      logger.info(`Reset: closed ${closedCount} connections, cleared all channels`);
+
+      return new Response(JSON.stringify({
+        closed: closedCount,
+        message: "All connections closed and channels cleared"
       }), {
         headers: {
           "Content-Type": "application/json",
