@@ -99,6 +99,14 @@
       .hidden {
         display: none;
       }
+      /* Hidden container for HTML-to-Figma conversion */
+      #html-render-container {
+        position: absolute;
+        left: -9999px;
+        top: -9999px;
+        width: 1440px;
+        visibility: hidden;
+      }
       .logo {
         width: 50px;
         height: 50px;
@@ -253,6 +261,12 @@
         </div>
       </div>
     </div>
+
+    <!-- Hidden container for HTML-to-Figma rendering -->
+    <div id="html-render-container"></div>
+
+    <!-- HTML-to-Figma browser library -->
+    <script src="html-figma-browser.js"></script>
 
     <script>
       // WebSocket connection state
@@ -414,7 +428,13 @@
         // If it's a new command
         if (data.command) {
           try {
-            // Send the command to the plugin code
+            // Handle convert-html-to-layers in the browser (needs DOM APIs)
+            if (data.command === "convert-html-to-layers") {
+              handleConvertHtmlToLayers(data.id, data.params);
+              return;
+            }
+
+            // Send other commands to the plugin code
             parent.postMessage(
               {
                 pluginMessage: {
@@ -433,6 +453,104 @@
               error.message || "Error executing command"
             );
           }
+        }
+      }
+
+      // Convert HTML to Figma LayerNodes using html-figma library
+      async function handleConvertHtmlToLayers(id, params) {
+        try {
+          const { html, width = 1440 } = params || {};
+
+          if (!html) {
+            sendErrorResponse(id, "Missing required parameter: html");
+            return;
+          }
+
+          // Get the render container
+          const container = document.getElementById("html-render-container");
+          container.style.width = width + "px";
+
+          // Inject the HTML
+          container.innerHTML = html;
+
+          // Wait for any images to load and styles to apply
+          await new Promise(resolve => setTimeout(resolve, 100));
+
+          // Convert to LayerNodes using html-figma
+          let layers;
+          if (typeof HtmlFigma !== "undefined" && HtmlFigma.htmlToFigma) {
+            layers = HtmlFigma.htmlToFigma(container);
+          } else {
+            sendErrorResponse(id, "HtmlFigma library not loaded");
+            return;
+          }
+
+          // Clean up
+          container.innerHTML = "";
+
+          // Send result back
+          sendSuccessResponse(id, { layers });
+        } catch (error) {
+          console.error("Error converting HTML to layers:", error);
+          sendErrorResponse(id, error.message || "Error converting HTML to layers");
+        }
+      }
+
+      // Convert HTML to LayerNodes for plugin code (internal use for render_html command)
+      async function handleConvertHtmlFromPlugin(html, width = 1440) {
+        try {
+          if (!html) {
+            parent.postMessage({
+              pluginMessage: {
+                type: "html-layers-result",
+                error: "Missing required parameter: html"
+              }
+            }, "*");
+            return;
+          }
+
+          // Get the render container
+          const container = document.getElementById("html-render-container");
+          container.style.width = width + "px";
+
+          // Inject the HTML
+          container.innerHTML = html;
+
+          // Wait for any images to load and styles to apply
+          await new Promise(resolve => setTimeout(resolve, 100));
+
+          // Convert to LayerNodes using html-figma
+          let layers;
+          if (typeof HtmlFigma !== "undefined" && HtmlFigma.htmlToFigma) {
+            layers = HtmlFigma.htmlToFigma(container);
+          } else {
+            parent.postMessage({
+              pluginMessage: {
+                type: "html-layers-result",
+                error: "HtmlFigma library not loaded"
+              }
+            }, "*");
+            return;
+          }
+
+          // Clean up
+          container.innerHTML = "";
+
+          // Send layers back to plugin code
+          parent.postMessage({
+            pluginMessage: {
+              type: "html-layers-result",
+              layers: layers
+            }
+          }, "*");
+        } catch (error) {
+          console.error("Error converting HTML from plugin:", error);
+          parent.postMessage({
+            pluginMessage: {
+              type: "html-layers-result",
+              error: error.message || "Error converting HTML"
+            }
+          }, "*");
         }
       }
 
@@ -648,6 +766,10 @@
             updateProgressUI(message);
             // Forward progress update to server
             sendProgressUpdateToServer(message);
+            break;
+          case "convert-html":
+            // Convert HTML to LayerNodes and send back to plugin code
+            handleConvertHtmlFromPlugin(message.html, message.width);
             break;
         }
       };

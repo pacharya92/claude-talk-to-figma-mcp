@@ -214,6 +214,25 @@ async function handleCommand(command, params) {
       return await getViewport();
     case "select_nodes":
       return await selectNodes(params);
+    // UI Component tools
+    case "create_button":
+      return await createButton(params);
+    case "create_input":
+      return await createInput(params);
+    case "create_card":
+      return await createCard(params);
+    case "create_avatar":
+      return await createAvatar(params);
+    case "create_badge":
+      return await createBadge(params);
+    case "create_icon_placeholder":
+      return await createIconPlaceholder(params);
+    case "create_divider":
+      return await createDivider(params);
+    case "render_html":
+      return await renderHtml(params);
+    case "create_login_screen":
+      return await createLoginScreen(params);
     default:
       throw new Error(`Unknown command: ${command}`);
   }
@@ -3848,4 +3867,1234 @@ async function selectNodes(params) {
       name: n.name
     }))
   };
+}
+
+// ============================================
+// UI COMPONENT TOOLS
+// High-level tools for creating common UI components
+// ============================================
+
+async function createButton(params) {
+  const {
+    x = 0,
+    y = 0,
+    text = "Button",
+    width,
+    height = 40,
+    fontSize = 14,
+    fontWeight = 600,
+    paddingX = 16,
+    paddingY = 10,
+    fillColor = { r: 0.22, g: 0.42, b: 0.92, a: 1 },
+    textColor = { r: 1, g: 1, b: 1, a: 1 },
+    strokeColor,
+    strokeWeight = 0,
+    cornerRadius = 8,
+    parentId,
+    name = "Button",
+  } = params || {};
+
+  // Create button frame
+  const button = figma.createFrame();
+  button.name = name;
+  button.x = x;
+  button.y = y;
+
+  // Set fill color
+  button.fills = [{
+    type: "SOLID",
+    color: { r: fillColor.r, g: fillColor.g, b: fillColor.b },
+    opacity: fillColor.a !== undefined ? fillColor.a : 1,
+  }];
+
+  // Set stroke if provided
+  if (strokeColor && strokeWeight > 0) {
+    button.strokes = [{
+      type: "SOLID",
+      color: { r: strokeColor.r, g: strokeColor.g, b: strokeColor.b },
+      opacity: strokeColor.a !== undefined ? strokeColor.a : 1,
+    }];
+    button.strokeWeight = strokeWeight;
+  }
+
+  // Set corner radius
+  button.cornerRadius = cornerRadius;
+
+  // Set up auto-layout for proper padding
+  button.layoutMode = "HORIZONTAL";
+  button.primaryAxisAlignItems = "CENTER";
+  button.counterAxisAlignItems = "CENTER";
+  button.paddingLeft = paddingX;
+  button.paddingRight = paddingX;
+  button.paddingTop = paddingY;
+  button.paddingBottom = paddingY;
+  button.primaryAxisSizingMode = width ? "FIXED" : "AUTO";
+  button.counterAxisSizingMode = "AUTO";
+  if (width) {
+    button.resize(width, height);
+  }
+
+  // Create text
+  const textNode = figma.createText();
+  await figma.loadFontAsync({ family: "Inter", style: "Semi Bold" });
+  textNode.fontName = { family: "Inter", style: "Semi Bold" };
+  textNode.characters = text;
+  textNode.fontSize = fontSize;
+  textNode.fills = [{
+    type: "SOLID",
+    color: { r: textColor.r, g: textColor.g, b: textColor.b },
+    opacity: textColor.a !== undefined ? textColor.a : 1,
+  }];
+  textNode.name = "Label";
+
+  button.appendChild(textNode);
+
+  // Append to parent or page
+  if (parentId) {
+    const parentNode = await figma.getNodeByIdAsync(parentId);
+    if (parentNode && "appendChild" in parentNode) {
+      parentNode.appendChild(button);
+    }
+  } else {
+    figma.currentPage.appendChild(button);
+  }
+
+  return {
+    id: button.id,
+    name: button.name,
+    width: button.width,
+    height: button.height,
+  };
+}
+
+async function createInput(params) {
+  const {
+    x = 0,
+    y = 0,
+    label,
+    placeholder = "",
+    width = 280,
+    height = 44,
+    fontSize = 14,
+    paddingX = 12,
+    paddingY = 10,
+    strokeColor = { r: 0.8, g: 0.8, b: 0.8, a: 1 },
+    backgroundColor = { r: 1, g: 1, b: 1, a: 1 },
+    textColor = { r: 0.13, g: 0.13, b: 0.13, a: 1 },
+    labelColor = { r: 0.4, g: 0.4, b: 0.4, a: 1 },
+    placeholderColor = { r: 0.6, g: 0.6, b: 0.6, a: 1 },
+    cornerRadius = 8,
+    errorMessage,
+    errorColor = { r: 0.91, g: 0.27, b: 0.27, a: 1 },
+    parentId,
+    name = "Input",
+  } = params || {};
+
+  // Create container for label + input
+  const container = figma.createFrame();
+  container.name = name;
+  container.x = x;
+  container.y = y;
+  container.fills = [];
+  container.layoutMode = "VERTICAL";
+  container.itemSpacing = 8;
+  container.primaryAxisSizingMode = "AUTO";
+  container.counterAxisSizingMode = "AUTO";
+
+  await figma.loadFontAsync({ family: "Inter", style: "Regular" });
+  await figma.loadFontAsync({ family: "Inter", style: "Medium" });
+
+  // Add label if provided
+  if (label) {
+    const labelNode = figma.createText();
+    labelNode.fontName = { family: "Inter", style: "Medium" };
+    labelNode.characters = label;
+    labelNode.fontSize = 14;
+    labelNode.fills = [{
+      type: "SOLID",
+      color: { r: labelColor.r, g: labelColor.g, b: labelColor.b },
+      opacity: labelColor.a !== undefined ? labelColor.a : 1,
+    }];
+    labelNode.name = "Label";
+    container.appendChild(labelNode);
+  }
+
+  // Create input field frame
+  const inputFrame = figma.createFrame();
+  inputFrame.name = "Input Field";
+  inputFrame.resize(width, height);
+  inputFrame.fills = [{
+    type: "SOLID",
+    color: { r: backgroundColor.r, g: backgroundColor.g, b: backgroundColor.b },
+    opacity: backgroundColor.a !== undefined ? backgroundColor.a : 1,
+  }];
+  inputFrame.strokes = [{
+    type: "SOLID",
+    color: { r: strokeColor.r, g: strokeColor.g, b: strokeColor.b },
+    opacity: strokeColor.a !== undefined ? strokeColor.a : 1,
+  }];
+  inputFrame.strokeWeight = 1;
+  inputFrame.cornerRadius = cornerRadius;
+
+  // Auto-layout for input
+  inputFrame.layoutMode = "HORIZONTAL";
+  inputFrame.primaryAxisAlignItems = "MIN";
+  inputFrame.counterAxisAlignItems = "CENTER";
+  inputFrame.paddingLeft = paddingX;
+  inputFrame.paddingRight = paddingX;
+  inputFrame.paddingTop = paddingY;
+  inputFrame.paddingBottom = paddingY;
+
+  // Add placeholder text
+  const placeholderNode = figma.createText();
+  placeholderNode.fontName = { family: "Inter", style: "Regular" };
+  placeholderNode.characters = placeholder || "Enter text...";
+  placeholderNode.fontSize = fontSize;
+  placeholderNode.fills = [{
+    type: "SOLID",
+    color: { r: placeholderColor.r, g: placeholderColor.g, b: placeholderColor.b },
+    opacity: placeholderColor.a !== undefined ? placeholderColor.a : 1,
+  }];
+  placeholderNode.name = "Placeholder";
+  inputFrame.appendChild(placeholderNode);
+
+  container.appendChild(inputFrame);
+
+  // Add error message if provided
+  if (errorMessage) {
+    const errorNode = figma.createText();
+    errorNode.fontName = { family: "Inter", style: "Regular" };
+    errorNode.characters = errorMessage;
+    errorNode.fontSize = 12;
+    errorNode.fills = [{
+      type: "SOLID",
+      color: { r: errorColor.r, g: errorColor.g, b: errorColor.b },
+      opacity: errorColor.a !== undefined ? errorColor.a : 1,
+    }];
+    errorNode.name = "Error Message";
+    container.appendChild(errorNode);
+  }
+
+  // Append to parent or page
+  if (parentId) {
+    const parentNode = await figma.getNodeByIdAsync(parentId);
+    if (parentNode && "appendChild" in parentNode) {
+      parentNode.appendChild(container);
+    }
+  } else {
+    figma.currentPage.appendChild(container);
+  }
+
+  return {
+    id: container.id,
+    name: container.name,
+    width: container.width,
+    height: container.height,
+    inputFieldId: inputFrame.id,
+  };
+}
+
+async function createCard(params) {
+  const {
+    x = 0,
+    y = 0,
+    width = 320,
+    height = 200,
+    padding = 24,
+    backgroundColor = { r: 1, g: 1, b: 1, a: 1 },
+    cornerRadius = 12,
+    hasShadow = true,
+    shadowColor = { r: 0, g: 0, b: 0, a: 0.08 },
+    shadowOffset = { x: 0, y: 2 },
+    shadowRadius = 8,
+    hasStroke = false,
+    strokeColor = { r: 0.9, g: 0.9, b: 0.9, a: 1 },
+    strokeWeight = 1,
+    parentId,
+    name = "Card",
+  } = params || {};
+
+  const card = figma.createFrame();
+  card.name = name;
+  card.x = x;
+  card.y = y;
+  card.resize(width, height);
+
+  // Set fill
+  card.fills = [{
+    type: "SOLID",
+    color: { r: backgroundColor.r, g: backgroundColor.g, b: backgroundColor.b },
+    opacity: backgroundColor.a !== undefined ? backgroundColor.a : 1,
+  }];
+
+  // Set corner radius
+  card.cornerRadius = cornerRadius;
+
+  // Set stroke if enabled
+  if (hasStroke) {
+    card.strokes = [{
+      type: "SOLID",
+      color: { r: strokeColor.r, g: strokeColor.g, b: strokeColor.b },
+      opacity: strokeColor.a !== undefined ? strokeColor.a : 1,
+    }];
+    card.strokeWeight = strokeWeight;
+  }
+
+  // Set shadow if enabled
+  if (hasShadow) {
+    card.effects = [{
+      type: "DROP_SHADOW",
+      visible: true,
+      blendMode: "NORMAL",
+      color: { r: shadowColor.r, g: shadowColor.g, b: shadowColor.b, a: shadowColor.a || 0.08 },
+      offset: { x: shadowOffset.x || 0, y: shadowOffset.y || 2 },
+      radius: shadowRadius,
+      spread: 0,
+    }];
+  }
+
+  // Set up auto-layout with padding
+  card.layoutMode = "VERTICAL";
+  card.paddingLeft = padding;
+  card.paddingRight = padding;
+  card.paddingTop = padding;
+  card.paddingBottom = padding;
+  card.primaryAxisSizingMode = "FIXED";
+  card.counterAxisSizingMode = "FIXED";
+
+  // Append to parent or page
+  if (parentId) {
+    const parentNode = await figma.getNodeByIdAsync(parentId);
+    if (parentNode && "appendChild" in parentNode) {
+      parentNode.appendChild(card);
+    }
+  } else {
+    figma.currentPage.appendChild(card);
+  }
+
+  return {
+    id: card.id,
+    name: card.name,
+    width: card.width,
+    height: card.height,
+  };
+}
+
+async function createAvatar(params) {
+  const {
+    x = 0,
+    y = 0,
+    size = 40,
+    initials,
+    backgroundColor = { r: 0.22, g: 0.42, b: 0.92, a: 1 },
+    textColor = { r: 1, g: 1, b: 1, a: 1 },
+    fontSize = 16,
+    fontWeight = 600,
+    parentId,
+    name = "Avatar",
+  } = params || {};
+
+  const avatar = figma.createFrame();
+  avatar.name = name;
+  avatar.x = x;
+  avatar.y = y;
+  avatar.resize(size, size);
+
+  // Set fill
+  avatar.fills = [{
+    type: "SOLID",
+    color: { r: backgroundColor.r, g: backgroundColor.g, b: backgroundColor.b },
+    opacity: backgroundColor.a !== undefined ? backgroundColor.a : 1,
+  }];
+
+  // Make it circular
+  avatar.cornerRadius = size / 2;
+
+  // Center content
+  avatar.layoutMode = "HORIZONTAL";
+  avatar.primaryAxisAlignItems = "CENTER";
+  avatar.counterAxisAlignItems = "CENTER";
+
+  // Add initials if provided
+  if (initials) {
+    await figma.loadFontAsync({ family: "Inter", style: "Semi Bold" });
+    const textNode = figma.createText();
+    textNode.fontName = { family: "Inter", style: "Semi Bold" };
+    textNode.characters = initials.substring(0, 2).toUpperCase();
+    textNode.fontSize = fontSize;
+    textNode.fills = [{
+      type: "SOLID",
+      color: { r: textColor.r, g: textColor.g, b: textColor.b },
+      opacity: textColor.a !== undefined ? textColor.a : 1,
+    }];
+    textNode.name = "Initials";
+    avatar.appendChild(textNode);
+  }
+
+  // Append to parent or page
+  if (parentId) {
+    const parentNode = await figma.getNodeByIdAsync(parentId);
+    if (parentNode && "appendChild" in parentNode) {
+      parentNode.appendChild(avatar);
+    }
+  } else {
+    figma.currentPage.appendChild(avatar);
+  }
+
+  return {
+    id: avatar.id,
+    name: avatar.name,
+    size: avatar.width,
+  };
+}
+
+async function createBadge(params) {
+  const {
+    x = 0,
+    y = 0,
+    text = "Badge",
+    height = 24,
+    fontSize = 12,
+    fontWeight = 500,
+    paddingX = 8,
+    paddingY = 4,
+    fillColor = { r: 0.96, g: 0.96, b: 0.96, a: 1 },
+    textColor = { r: 0.4, g: 0.4, b: 0.4, a: 1 },
+    cornerRadius = 9999,
+    parentId,
+    name = "Badge",
+  } = params || {};
+
+  const badge = figma.createFrame();
+  badge.name = name;
+  badge.x = x;
+  badge.y = y;
+
+  // Set fill
+  badge.fills = [{
+    type: "SOLID",
+    color: { r: fillColor.r, g: fillColor.g, b: fillColor.b },
+    opacity: fillColor.a !== undefined ? fillColor.a : 1,
+  }];
+
+  // Pill shape
+  badge.cornerRadius = cornerRadius;
+
+  // Auto-layout
+  badge.layoutMode = "HORIZONTAL";
+  badge.primaryAxisAlignItems = "CENTER";
+  badge.counterAxisAlignItems = "CENTER";
+  badge.paddingLeft = paddingX;
+  badge.paddingRight = paddingX;
+  badge.paddingTop = paddingY;
+  badge.paddingBottom = paddingY;
+  badge.primaryAxisSizingMode = "AUTO";
+  badge.counterAxisSizingMode = "AUTO";
+
+  // Add text
+  await figma.loadFontAsync({ family: "Inter", style: "Medium" });
+  const textNode = figma.createText();
+  textNode.fontName = { family: "Inter", style: "Medium" };
+  textNode.characters = text;
+  textNode.fontSize = fontSize;
+  textNode.fills = [{
+    type: "SOLID",
+    color: { r: textColor.r, g: textColor.g, b: textColor.b },
+    opacity: textColor.a !== undefined ? textColor.a : 1,
+  }];
+  textNode.name = "Text";
+  badge.appendChild(textNode);
+
+  // Append to parent or page
+  if (parentId) {
+    const parentNode = await figma.getNodeByIdAsync(parentId);
+    if (parentNode && "appendChild" in parentNode) {
+      parentNode.appendChild(badge);
+    }
+  } else {
+    figma.currentPage.appendChild(badge);
+  }
+
+  return {
+    id: badge.id,
+    name: badge.name,
+    width: badge.width,
+    height: badge.height,
+  };
+}
+
+async function createIconPlaceholder(params) {
+  const {
+    x = 0,
+    y = 0,
+    size = 24,
+    color = { r: 0.4, g: 0.4, b: 0.4, a: 1 },
+    parentId,
+    name = "Icon",
+  } = params || {};
+
+  const icon = figma.createFrame();
+  icon.name = name;
+  icon.x = x;
+  icon.y = y;
+  icon.resize(size, size);
+
+  // Light gray background
+  icon.fills = [{
+    type: "SOLID",
+    color: { r: 0.95, g: 0.95, b: 0.95 },
+    opacity: 1,
+  }];
+
+  // Small corner radius
+  icon.cornerRadius = 4;
+
+  // Center layout
+  icon.layoutMode = "HORIZONTAL";
+  icon.primaryAxisAlignItems = "CENTER";
+  icon.counterAxisAlignItems = "CENTER";
+
+  // Add an X shape as placeholder indicator
+  const line1 = figma.createLine();
+  line1.resize(size * 0.4, 0);
+  line1.rotation = 45;
+  line1.strokes = [{
+    type: "SOLID",
+    color: { r: color.r, g: color.g, b: color.b },
+    opacity: color.a !== undefined ? color.a : 1,
+  }];
+  line1.strokeWeight = 1.5;
+
+  const line2 = figma.createLine();
+  line2.resize(size * 0.4, 0);
+  line2.rotation = -45;
+  line2.strokes = [{
+    type: "SOLID",
+    color: { r: color.r, g: color.g, b: color.b },
+    opacity: color.a !== undefined ? color.a : 1,
+  }];
+  line2.strokeWeight = 1.5;
+
+  // Position lines in center
+  line1.x = size * 0.3;
+  line1.y = size * 0.5;
+  line2.x = size * 0.3;
+  line2.y = size * 0.5;
+
+  icon.appendChild(line1);
+  icon.appendChild(line2);
+
+  // Append to parent or page
+  if (parentId) {
+    const parentNode = await figma.getNodeByIdAsync(parentId);
+    if (parentNode && "appendChild" in parentNode) {
+      parentNode.appendChild(icon);
+    }
+  } else {
+    figma.currentPage.appendChild(icon);
+  }
+
+  return {
+    id: icon.id,
+    name: icon.name,
+    size: icon.width,
+  };
+}
+
+async function createDivider(params) {
+  const {
+    x = 0,
+    y = 0,
+    length = 100,
+    orientation = "horizontal",
+    color = { r: 0.9, g: 0.9, b: 0.9, a: 1 },
+    thickness = 1,
+    parentId,
+    name = "Divider",
+  } = params || {};
+
+  const divider = figma.createLine();
+  divider.name = name;
+
+  if (orientation === "horizontal") {
+    divider.x = x;
+    divider.y = y;
+    divider.resize(length, 0);
+    divider.rotation = 0;
+  } else {
+    divider.x = x;
+    divider.y = y;
+    divider.resize(length, 0);
+    divider.rotation = 90;
+  }
+
+  divider.strokes = [{
+    type: "SOLID",
+    color: { r: color.r, g: color.g, b: color.b },
+    opacity: color.a !== undefined ? color.a : 1,
+  }];
+  divider.strokeWeight = thickness;
+
+  // Append to parent or page
+  if (parentId) {
+    const parentNode = await figma.getNodeByIdAsync(parentId);
+    if (parentNode && "appendChild" in parentNode) {
+      parentNode.appendChild(divider);
+    }
+  } else {
+    figma.currentPage.appendChild(divider);
+  }
+
+  return {
+    id: divider.id,
+    name: divider.name,
+    length: length,
+    orientation: orientation,
+  };
+}
+
+// ============================================================================
+// HTML to Figma Rendering
+// ============================================================================
+
+/**
+ * Render HTML to Figma by converting LayerNodes to Figma nodes
+ * The html is first converted to LayerNodes in ui.html (browser environment),
+ * then this function creates actual Figma nodes from those LayerNodes.
+ */
+async function renderHtml(params) {
+  const { html, x = 0, y = 0, width = 1440, name = "HTML Render" } = params || {};
+
+  if (!html) {
+    throw new Error("Missing required parameter: html");
+  }
+
+  // Create a base frame
+  const baseFrame = figma.createFrame();
+  baseFrame.name = name;
+  baseFrame.x = x;
+  baseFrame.y = y;
+  baseFrame.resize(width, 100); // Will be resized based on content
+  baseFrame.fills = [{ type: "SOLID", color: { r: 1, g: 1, b: 1 } }];
+  baseFrame.clipsContent = false;
+
+  figma.currentPage.appendChild(baseFrame);
+
+  // Send the HTML to ui.html for conversion to LayerNodes
+  return new Promise((resolve, reject) => {
+    // Set up a one-time message handler
+    const messageHandler = async (msg) => {
+      if (msg.type === "html-layers-result") {
+        // Remove this handler
+        figma.ui.off("message", messageHandler);
+
+        if (msg.error) {
+          baseFrame.remove();
+          reject(new Error(msg.error));
+          return;
+        }
+
+        try {
+          const layers = msg.layers;
+          if (!layers || (Array.isArray(layers) && layers.length === 0)) {
+            baseFrame.remove();
+            reject(new Error("No layers generated from HTML"));
+            return;
+          }
+
+          // Process the layer tree
+          await processLayersToFigma(layers, baseFrame);
+
+          // Resize frame to fit content
+          const children = baseFrame.children;
+          if (children.length > 0) {
+            let maxWidth = 0;
+            let maxHeight = 0;
+            for (const child of children) {
+              if ('x' in child && 'width' in child) {
+                maxWidth = Math.max(maxWidth, child.x + child.width);
+              }
+              if ('y' in child && 'height' in child) {
+                maxHeight = Math.max(maxHeight, child.y + child.height);
+              }
+            }
+            if (maxWidth > 0 && maxHeight > 0) {
+              baseFrame.resize(Math.max(width, maxWidth), maxHeight);
+            }
+          }
+
+          resolve({
+            success: true,
+            frameId: baseFrame.id,
+            frameName: baseFrame.name,
+          });
+        } catch (err) {
+          baseFrame.remove();
+          reject(err);
+        }
+      }
+    };
+
+    figma.ui.on("message", messageHandler);
+
+    // Request conversion from ui.html
+    figma.ui.postMessage({
+      type: "convert-html",
+      html: html,
+      width: width,
+    });
+
+    // Timeout after 30 seconds
+    setTimeout(() => {
+      figma.ui.off("message", messageHandler);
+      baseFrame.remove();
+      reject(new Error("HTML to Figma conversion timed out"));
+    }, 30000);
+  });
+}
+
+/**
+ * Process LayerNodes and create corresponding Figma nodes
+ */
+async function processLayersToFigma(layers, parentFrame) {
+  if (!layers) return;
+
+  // Handle both single layer and array of layers
+  const layerArray = Array.isArray(layers) ? layers : [layers];
+
+  for (const layer of layerArray) {
+    if (!layer || !layer.type) continue;
+
+    try {
+      const node = await createNodeFromLayer(layer);
+      if (node) {
+        parentFrame.appendChild(node);
+
+        // Process children recursively
+        if (layer.children && layer.children.length > 0 && 'appendChild' in node) {
+          await processLayersToFigma(layer.children, node);
+        }
+      }
+    } catch (err) {
+      console.warn("Error processing layer:", layer.type, err);
+    }
+  }
+}
+
+/**
+ * Create a Figma node from a LayerNode
+ */
+async function createNodeFromLayer(layer) {
+  let node;
+
+  switch (layer.type) {
+    case "FRAME":
+    case "GROUP":
+      node = figma.createFrame();
+      break;
+    case "RECTANGLE":
+      node = figma.createRectangle();
+      break;
+    case "TEXT":
+      node = figma.createText();
+      break;
+    case "SVG":
+      if (layer.svg) {
+        try {
+          node = figma.createNodeFromSvg(layer.svg);
+        } catch (e) {
+          console.warn("Error creating SVG node:", e);
+          return null;
+        }
+      }
+      break;
+    case "ELLIPSE":
+      node = figma.createEllipse();
+      break;
+    case "LINE":
+      node = figma.createLine();
+      break;
+    default:
+      console.warn("Unknown layer type:", layer.type);
+      return null;
+  }
+
+  if (!node) return null;
+
+  // Apply common properties
+  if (layer.name) node.name = layer.name;
+  if (typeof layer.x === "number") node.x = layer.x;
+  if (typeof layer.y === "number") node.y = layer.y;
+  if (typeof layer.opacity === "number") node.opacity = layer.opacity;
+  if (typeof layer.visible === "boolean") node.visible = layer.visible;
+
+  // Apply size
+  if (typeof layer.width === "number" && typeof layer.height === "number") {
+    try {
+      node.resize(Math.max(1, layer.width), Math.max(1, layer.height));
+    } catch (e) {
+      // Some nodes can't be resized
+    }
+  }
+
+  // Apply fills
+  if (layer.fills && Array.isArray(layer.fills)) {
+    try {
+      node.fills = layer.fills;
+    } catch (e) {
+      console.warn("Error applying fills:", e);
+    }
+  }
+
+  // Apply strokes
+  if (layer.strokes && Array.isArray(layer.strokes)) {
+    try {
+      node.strokes = layer.strokes;
+    } catch (e) {
+      console.warn("Error applying strokes:", e);
+    }
+  }
+
+  if (typeof layer.strokeWeight === "number") {
+    node.strokeWeight = layer.strokeWeight;
+  }
+
+  // Apply effects (shadows, blurs)
+  if (layer.effects && Array.isArray(layer.effects)) {
+    try {
+      node.effects = layer.effects;
+    } catch (e) {
+      console.warn("Error applying effects:", e);
+    }
+  }
+
+  // Apply corner radius for frames/rectangles
+  if (typeof layer.cornerRadius === "number" && 'cornerRadius' in node) {
+    node.cornerRadius = layer.cornerRadius;
+  }
+
+  // Apply auto-layout properties for frames
+  if (node.type === "FRAME") {
+    if (layer.layoutMode) {
+      node.layoutMode = layer.layoutMode;
+    }
+    if (typeof layer.primaryAxisAlignItems === "string") {
+      node.primaryAxisAlignItems = layer.primaryAxisAlignItems;
+    }
+    if (typeof layer.counterAxisAlignItems === "string") {
+      node.counterAxisAlignItems = layer.counterAxisAlignItems;
+    }
+    if (typeof layer.itemSpacing === "number") {
+      node.itemSpacing = layer.itemSpacing;
+    }
+    if (typeof layer.paddingTop === "number") node.paddingTop = layer.paddingTop;
+    if (typeof layer.paddingRight === "number") node.paddingRight = layer.paddingRight;
+    if (typeof layer.paddingBottom === "number") node.paddingBottom = layer.paddingBottom;
+    if (typeof layer.paddingLeft === "number") node.paddingLeft = layer.paddingLeft;
+    if (typeof layer.clipsContent === "boolean") node.clipsContent = layer.clipsContent;
+  }
+
+  // Apply text properties
+  if (node.type === "TEXT") {
+    // Load font first
+    const fontFamily = layer.fontFamily || "Inter";
+    const fontStyle = layer.fontStyle || "Regular";
+
+    try {
+      await figma.loadFontAsync({ family: fontFamily, style: fontStyle });
+      node.fontName = { family: fontFamily, style: fontStyle };
+    } catch (e) {
+      // Fallback to Inter
+      await figma.loadFontAsync({ family: "Inter", style: "Regular" });
+      node.fontName = { family: "Inter", style: "Regular" };
+    }
+
+    // Set text content
+    if (layer.characters) {
+      node.characters = layer.characters;
+    }
+
+    // Set text properties
+    if (typeof layer.fontSize === "number") {
+      node.fontSize = layer.fontSize;
+    }
+
+    if (layer.textAlignHorizontal) {
+      node.textAlignHorizontal = layer.textAlignHorizontal;
+    }
+
+    if (layer.textAlignVertical) {
+      node.textAlignVertical = layer.textAlignVertical;
+    }
+
+    if (layer.lineHeight) {
+      node.lineHeight = layer.lineHeight;
+    }
+
+    if (layer.letterSpacing) {
+      node.letterSpacing = layer.letterSpacing;
+    }
+
+    // Auto-resize text
+    node.textAutoResize = "HEIGHT";
+  }
+
+  return node;
+}
+
+// ============================================================================
+// Login Screen Component
+// ============================================================================
+
+/**
+ * Create a complete login screen with all components
+ */
+async function createLoginScreen(params) {
+  const {
+    x = 0,
+    y = 0,
+    title = "Welcome Back",
+    subtitle,
+    buttonText = "Sign In",
+    showForgotPassword = true,
+    showSignUp = true,
+    width = 400,
+    variant = "default",
+    brandColor = { r: 0.22, g: 0.42, b: 0.92 },
+    name = "Login Screen"
+  } = params || {};
+
+  // Design tokens
+  const colors = {
+    white: { r: 1, g: 1, b: 1 },
+    gray100: { r: 0.96, g: 0.96, b: 0.96 },
+    gray300: { r: 0.80, g: 0.80, b: 0.80 },
+    gray500: { r: 0.60, g: 0.60, b: 0.60 },
+    gray700: { r: 0.40, g: 0.40, b: 0.40 },
+    gray900: { r: 0.13, g: 0.13, b: 0.13 },
+    primary: brandColor,
+  };
+
+  // Load fonts
+  await figma.loadFontAsync({ family: "Inter", style: "Regular" });
+  await figma.loadFontAsync({ family: "Inter", style: "Medium" });
+  await figma.loadFontAsync({ family: "Inter", style: "Semi Bold" });
+  await figma.loadFontAsync({ family: "Inter", style: "Bold" });
+
+  // Create main container frame
+  const container = figma.createFrame();
+  container.name = name;
+  container.x = x;
+  container.y = y;
+  container.resize(width, 100); // Will auto-resize
+  container.fills = [{ type: "SOLID", color: colors.white }];
+  container.cornerRadius = 16;
+  container.effects = [
+    {
+      type: "DROP_SHADOW",
+      color: { r: 0, g: 0, b: 0, a: 0.1 },
+      offset: { x: 0, y: 4 },
+      radius: 24,
+      spread: 0,
+      visible: true,
+      blendMode: "NORMAL",
+    },
+  ];
+
+  // Set up auto layout
+  container.layoutMode = "VERTICAL";
+  container.primaryAxisAlignItems = "CENTER";
+  container.counterAxisAlignItems = "CENTER";
+  container.paddingTop = 48;
+  container.paddingBottom = 48;
+  container.paddingLeft = 40;
+  container.paddingRight = 40;
+  container.itemSpacing = 24;
+  container.primaryAxisSizingMode = "AUTO";
+  container.counterAxisSizingMode = "FIXED";
+
+  // Add branded header bar for "branded" variant
+  if (variant === "branded") {
+    const headerBar = figma.createFrame();
+    headerBar.name = "Header Bar";
+    headerBar.resize(width, 8);
+    headerBar.fills = [{ type: "SOLID", color: colors.primary }];
+    headerBar.layoutAlign = "STRETCH";
+    headerBar.layoutSizingHorizontal = "FILL";
+
+    // Insert at beginning
+    container.insertChild(0, headerBar);
+    container.paddingTop = 40;
+  }
+
+  // Title
+  const titleText = figma.createText();
+  titleText.name = "Title";
+  titleText.characters = title;
+  titleText.fontSize = 28;
+  titleText.fontName = { family: "Inter", style: "Bold" };
+  titleText.fills = [{ type: "SOLID", color: colors.gray900 }];
+  titleText.textAlignHorizontal = "CENTER";
+  container.appendChild(titleText);
+
+  // Subtitle (optional)
+  if (subtitle) {
+    const subtitleText = figma.createText();
+    subtitleText.name = "Subtitle";
+    subtitleText.characters = subtitle;
+    subtitleText.fontSize = 14;
+    subtitleText.fontName = { family: "Inter", style: "Regular" };
+    subtitleText.fills = [{ type: "SOLID", color: colors.gray500 }];
+    subtitleText.textAlignHorizontal = "CENTER";
+    container.appendChild(subtitleText);
+  }
+
+  // Form container
+  const formContainer = figma.createFrame();
+  formContainer.name = "Form";
+  formContainer.fills = [];
+  formContainer.layoutMode = "VERTICAL";
+  formContainer.itemSpacing = 20;
+  formContainer.primaryAxisSizingMode = "AUTO";
+  formContainer.counterAxisSizingMode = "FIXED";
+  formContainer.resize(width - 80, 100);
+  formContainer.layoutAlign = "STRETCH";
+  formContainer.layoutSizingHorizontal = "FILL";
+  container.appendChild(formContainer);
+
+  // Email field
+  const emailField = await createInputField({
+    label: "Email",
+    placeholder: "Enter your email",
+    width: width - 80,
+    colors,
+  });
+  formContainer.appendChild(emailField);
+
+  // Password field
+  const passwordField = await createInputField({
+    label: "Password",
+    placeholder: "Enter your password",
+    width: width - 80,
+    colors,
+    isPassword: true,
+  });
+  formContainer.appendChild(passwordField);
+
+  // Forgot password link (optional)
+  if (showForgotPassword) {
+    const forgotPassword = figma.createText();
+    forgotPassword.name = "Forgot Password Link";
+    forgotPassword.characters = "Forgot password?";
+    forgotPassword.fontSize = 14;
+    forgotPassword.fontName = { family: "Inter", style: "Medium" };
+    forgotPassword.fills = [{ type: "SOLID", color: colors.primary }];
+    forgotPassword.textAlignHorizontal = "RIGHT";
+    forgotPassword.layoutAlign = "MAX";
+    formContainer.appendChild(forgotPassword);
+  }
+
+  // Sign in button
+  const button = figma.createFrame();
+  button.name = "Sign In Button";
+  button.fills = [{ type: "SOLID", color: colors.primary }];
+  button.cornerRadius = 8;
+  button.layoutMode = "HORIZONTAL";
+  button.primaryAxisAlignItems = "CENTER";
+  button.counterAxisAlignItems = "CENTER";
+  button.paddingTop = 14;
+  button.paddingBottom = 14;
+  button.paddingLeft = 24;
+  button.paddingRight = 24;
+  button.primaryAxisSizingMode = "FIXED";
+  button.counterAxisSizingMode = "AUTO";
+  button.resize(width - 80, 48);
+  button.layoutAlign = "STRETCH";
+  button.layoutSizingHorizontal = "FILL";
+
+  const buttonLabel = figma.createText();
+  buttonLabel.name = "Button Label";
+  buttonLabel.characters = buttonText;
+  buttonLabel.fontSize = 16;
+  buttonLabel.fontName = { family: "Inter", style: "Semi Bold" };
+  buttonLabel.fills = [{ type: "SOLID", color: colors.white }];
+  buttonLabel.textAlignHorizontal = "CENTER";
+  buttonLabel.layoutAlign = "STRETCH";
+  buttonLabel.textAlignHorizontal = "CENTER";
+  button.appendChild(buttonLabel);
+
+  formContainer.appendChild(button);
+
+  // Sign up link (optional)
+  if (showSignUp) {
+    const signUpContainer = figma.createFrame();
+    signUpContainer.name = "Sign Up Container";
+    signUpContainer.fills = [];
+    signUpContainer.layoutMode = "HORIZONTAL";
+    signUpContainer.itemSpacing = 4;
+    signUpContainer.primaryAxisAlignItems = "CENTER";
+    signUpContainer.counterAxisAlignItems = "CENTER";
+    signUpContainer.primaryAxisSizingMode = "AUTO";
+    signUpContainer.counterAxisSizingMode = "AUTO";
+
+    const signUpText = figma.createText();
+    signUpText.name = "Sign Up Text";
+    signUpText.characters = "Don't have an account?";
+    signUpText.fontSize = 14;
+    signUpText.fontName = { family: "Inter", style: "Regular" };
+    signUpText.fills = [{ type: "SOLID", color: colors.gray500 }];
+    signUpContainer.appendChild(signUpText);
+
+    const signUpLink = figma.createText();
+    signUpLink.name = "Sign Up Link";
+    signUpLink.characters = "Sign up";
+    signUpLink.fontSize = 14;
+    signUpLink.fontName = { family: "Inter", style: "Medium" };
+    signUpLink.fills = [{ type: "SOLID", color: colors.primary }];
+    signUpContainer.appendChild(signUpLink);
+
+    container.appendChild(signUpContainer);
+  }
+
+  // Add divider and social login for default variant
+  if (variant === "default") {
+    // Divider with "or"
+    const dividerContainer = figma.createFrame();
+    dividerContainer.name = "Divider";
+    dividerContainer.fills = [];
+    dividerContainer.layoutMode = "HORIZONTAL";
+    dividerContainer.itemSpacing = 16;
+    dividerContainer.primaryAxisAlignItems = "CENTER";
+    dividerContainer.counterAxisAlignItems = "CENTER";
+    dividerContainer.resize(width - 80, 20);
+    dividerContainer.layoutAlign = "STRETCH";
+    dividerContainer.layoutSizingHorizontal = "FILL";
+
+    const leftLine = figma.createRectangle();
+    leftLine.name = "Left Line";
+    leftLine.resize(100, 1);
+    leftLine.fills = [{ type: "SOLID", color: colors.gray300 }];
+    leftLine.layoutGrow = 1;
+    dividerContainer.appendChild(leftLine);
+
+    const orText = figma.createText();
+    orText.name = "Or Text";
+    orText.characters = "or";
+    orText.fontSize = 14;
+    orText.fontName = { family: "Inter", style: "Regular" };
+    orText.fills = [{ type: "SOLID", color: colors.gray500 }];
+    dividerContainer.appendChild(orText);
+
+    const rightLine = figma.createRectangle();
+    rightLine.name = "Right Line";
+    rightLine.resize(100, 1);
+    rightLine.fills = [{ type: "SOLID", color: colors.gray300 }];
+    rightLine.layoutGrow = 1;
+    dividerContainer.appendChild(rightLine);
+
+    container.appendChild(dividerContainer);
+
+    // Social login button (placeholder)
+    const socialButton = figma.createFrame();
+    socialButton.name = "Continue with Google";
+    socialButton.fills = [{ type: "SOLID", color: colors.white }];
+    socialButton.strokes = [{ type: "SOLID", color: colors.gray300 }];
+    socialButton.strokeWeight = 1;
+    socialButton.cornerRadius = 8;
+    socialButton.layoutMode = "HORIZONTAL";
+    socialButton.primaryAxisAlignItems = "CENTER";
+    socialButton.counterAxisAlignItems = "CENTER";
+    socialButton.paddingTop = 12;
+    socialButton.paddingBottom = 12;
+    socialButton.paddingLeft = 24;
+    socialButton.paddingRight = 24;
+    socialButton.itemSpacing = 8;
+    socialButton.primaryAxisSizingMode = "FIXED";
+    socialButton.counterAxisSizingMode = "AUTO";
+    socialButton.resize(width - 80, 44);
+    socialButton.layoutAlign = "STRETCH";
+    socialButton.layoutSizingHorizontal = "FILL";
+
+    // Google icon placeholder
+    const iconPlaceholder = figma.createEllipse();
+    iconPlaceholder.name = "Google Icon";
+    iconPlaceholder.resize(20, 20);
+    iconPlaceholder.fills = [{ type: "SOLID", color: colors.gray300 }];
+    socialButton.appendChild(iconPlaceholder);
+
+    const socialLabel = figma.createText();
+    socialLabel.name = "Social Label";
+    socialLabel.characters = "Continue with Google";
+    socialLabel.fontSize = 14;
+    socialLabel.fontName = { family: "Inter", style: "Medium" };
+    socialLabel.fills = [{ type: "SOLID", color: colors.gray700 }];
+    socialButton.appendChild(socialLabel);
+
+    container.appendChild(socialButton);
+  }
+
+  figma.currentPage.appendChild(container);
+
+  return {
+    id: container.id,
+    name: container.name,
+  };
+}
+
+/**
+ * Helper function to create an input field with label
+ */
+async function createInputField({ label, placeholder, width, colors, isPassword = false }) {
+  const fieldContainer = figma.createFrame();
+  fieldContainer.name = `${label} Field`;
+  fieldContainer.fills = [];
+  fieldContainer.layoutMode = "VERTICAL";
+  fieldContainer.itemSpacing = 8;
+  fieldContainer.primaryAxisSizingMode = "AUTO";
+  fieldContainer.counterAxisSizingMode = "FIXED";
+  fieldContainer.resize(width, 100);
+  fieldContainer.layoutAlign = "STRETCH";
+  fieldContainer.layoutSizingHorizontal = "FILL";
+
+  // Label
+  const labelText = figma.createText();
+  labelText.name = "Label";
+  labelText.characters = label;
+  labelText.fontSize = 14;
+  labelText.fontName = { family: "Inter", style: "Medium" };
+  labelText.fills = [{ type: "SOLID", color: colors.gray700 }];
+  fieldContainer.appendChild(labelText);
+
+  // Input box
+  const inputBox = figma.createFrame();
+  inputBox.name = "Input Box";
+  inputBox.fills = [{ type: "SOLID", color: colors.white }];
+  inputBox.strokes = [{ type: "SOLID", color: colors.gray300 }];
+  inputBox.strokeWeight = 1;
+  inputBox.cornerRadius = 8;
+  inputBox.layoutMode = "HORIZONTAL";
+  inputBox.primaryAxisAlignItems = "MIN";
+  inputBox.counterAxisAlignItems = "CENTER";
+  inputBox.paddingTop = 12;
+  inputBox.paddingBottom = 12;
+  inputBox.paddingLeft = 16;
+  inputBox.paddingRight = 16;
+  inputBox.primaryAxisSizingMode = "FIXED";
+  inputBox.counterAxisSizingMode = "AUTO";
+  inputBox.resize(width, 48);
+  inputBox.layoutAlign = "STRETCH";
+  inputBox.layoutSizingHorizontal = "FILL";
+
+  // Placeholder text
+  const placeholderText = figma.createText();
+  placeholderText.name = "Placeholder";
+  placeholderText.characters = isPassword ? "••••••••" : placeholder;
+  placeholderText.fontSize = 14;
+  placeholderText.fontName = { family: "Inter", style: "Regular" };
+  placeholderText.fills = [{ type: "SOLID", color: colors.gray500 }];
+  inputBox.appendChild(placeholderText);
+
+  fieldContainer.appendChild(inputBox);
+
+  return fieldContainer;
 }
