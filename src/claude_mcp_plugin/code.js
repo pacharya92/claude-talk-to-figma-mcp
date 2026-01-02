@@ -122,6 +122,8 @@ async function handleCommand(command, params) {
       return await resizeNode(params);
     case "delete_node":
       return await deleteNode(params);
+    case "set_node_locked":
+      return await setNodeLocked(params);
     case "get_styles":
       return await getStyles();
     case "get_local_components":
@@ -755,6 +757,38 @@ async function deleteNode(params) {
   node.remove();
 
   return nodeInfo;
+}
+
+// Lock or unlock a node
+async function setNodeLocked(params) {
+  const { nodeId, locked } = params || {};
+
+  if (!nodeId) {
+    throw new Error("Missing nodeId parameter");
+  }
+
+  if (typeof locked !== "boolean") {
+    throw new Error("Missing or invalid locked parameter (must be boolean)");
+  }
+
+  const node = await figma.getNodeByIdAsync(nodeId);
+  if (!node) {
+    throw new Error(`Node not found with ID: ${nodeId}`);
+  }
+
+  // Check if the node supports the locked property
+  if (!("locked" in node)) {
+    throw new Error(`Node type ${node.type} does not support locking`);
+  }
+
+  node.locked = locked;
+
+  return {
+    id: node.id,
+    name: node.name,
+    type: node.type,
+    locked: node.locked,
+  };
 }
 
 async function getStyles() {

@@ -394,6 +394,146 @@ export function registerDocumentTools(server: McpServer): void {
     }
   );
 
+  // Lock Node Tool
+  server.tool(
+    "lock_node",
+    "Lock a node to prevent it from being selected or modified in Figma",
+    {
+      nodeId: z.string().describe("The ID of the node to lock"),
+    },
+    async ({ nodeId }) => {
+      try {
+        const result = await sendCommandToFigma("set_node_locked", {
+          nodeId,
+          locked: true,
+        });
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Locked node ${nodeId}`,
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Error locking node: ${error instanceof Error ? error.message : String(error)}`,
+            },
+          ],
+        };
+      }
+    }
+  );
+
+  // Unlock Node Tool
+  server.tool(
+    "unlock_node",
+    "Unlock a node to allow it to be selected and modified in Figma",
+    {
+      nodeId: z.string().describe("The ID of the node to unlock"),
+    },
+    async ({ nodeId }) => {
+      try {
+        const result = await sendCommandToFigma("set_node_locked", {
+          nodeId,
+          locked: false,
+        });
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Unlocked node ${nodeId}`,
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Error unlocking node: ${error instanceof Error ? error.message : String(error)}`,
+            },
+          ],
+        };
+      }
+    }
+  );
+
+  // Lock Multiple Nodes Tool
+  server.tool(
+    "lock_nodes",
+    "Lock multiple nodes at once to prevent them from being selected or modified",
+    {
+      nodeIds: z.array(z.string()).describe("Array of node IDs to lock"),
+    },
+    async ({ nodeIds }) => {
+      try {
+        const results = await Promise.all(
+          nodeIds.map(async (nodeId) => {
+            await sendCommandToFigma("set_node_locked", { nodeId, locked: true });
+            return nodeId;
+          })
+        );
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Locked ${results.length} nodes: ${results.join(", ")}`,
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Error locking nodes: ${error instanceof Error ? error.message : String(error)}`,
+            },
+          ],
+        };
+      }
+    }
+  );
+
+  // Unlock Multiple Nodes Tool
+  server.tool(
+    "unlock_nodes",
+    "Unlock multiple nodes at once to allow them to be selected and modified",
+    {
+      nodeIds: z.array(z.string()).describe("Array of node IDs to unlock"),
+    },
+    async ({ nodeIds }) => {
+      try {
+        const results = await Promise.all(
+          nodeIds.map(async (nodeId) => {
+            await sendCommandToFigma("set_node_locked", { nodeId, locked: false });
+            return nodeId;
+          })
+        );
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Unlocked ${results.length} nodes: ${results.join(", ")}`,
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Error unlocking nodes: ${error instanceof Error ? error.message : String(error)}`,
+            },
+          ],
+        };
+      }
+    }
+  );
+
   // Export Node as Image Tool
   server.tool(
     "export_node_as_image",
