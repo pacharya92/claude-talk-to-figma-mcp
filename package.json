@@ -32,7 +32,8 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "test:integration": "node scripts/test-integration.js"
+    "test:integration": "node scripts/test-integration.js",
+    "bundle:html-figma": "node scripts/bundle-html-figma.js"
   },
   "devDependencies": {
     "@anthropic-ai/dxt": "^0.2.0",

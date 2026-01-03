@@ -4113,6 +4113,9 @@ async function createInput(params) {
   inputFrame.paddingRight = paddingX;
   inputFrame.paddingTop = paddingY;
   inputFrame.paddingBottom = paddingY;
+  // Use FIXED sizing to respect width/height parameters (not HUG content)
+  inputFrame.primaryAxisSizingMode = "FIXED";
+  inputFrame.counterAxisSizingMode = "FIXED";
 
   // Add placeholder text
   const placeholderNode = figma.createText();
