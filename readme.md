@@ -314,11 +314,6 @@ src/
 4. **Documentation**: Update relevant sections
 5. **Pull Request**: Clear description of changes
 
-#### Recent Contributors
-- **[Taylor Smits](https://github.com/smitstay)** - DXT Package Support implementation, automated CI/CD workflows, testing improvements, and bug fixes ([PR #17](https://github.com/arinspunk/claude-talk-to-figma-mcp/pull/17), [PR #16](https://github.com/arinspunk/claude-talk-to-figma-mcp/pull/16), [PR #13](https://github.com/arinspunk/claude-talk-to-figma-mcp/pull/13), [PR #14](https://github.com/arinspunk/claude-talk-to-figma-mcp/pull/14))
-- **[easyhak](https://github.com/easyhak)** - Fixed build script not working on Windows OS ([PR #10](https://github.com/arinspunk/claude-talk-to-figma-mcp/pull/10))
-
----
 
 ## 📋 Version History
 
@@ -339,11 +334,10 @@ See [CHANGELOG.md](CHANGELOG.md) for complete version history.
 
 **License**: MIT License - see [LICENSE](LICENSE) file
 
-**Authors**:
+**Credits to Forked Repo Authors**:
 - **Xúlio Zé** - *Claude adaptation* - [GitHub](https://github.com/arinspunk)
 - **Sonny Lazuardi** - *Original implementation* - [GitHub](https://github.com/sonnylazuardi)
 
 **Acknowledgments**:
 - Anthropic team for Claude and Model Context Protocol
 - Figma community for excellent plugin API
-- Bun team for fast JavaScript runtime
