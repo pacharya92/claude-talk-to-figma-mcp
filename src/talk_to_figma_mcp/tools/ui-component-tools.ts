@@ -610,7 +610,7 @@ export function registerUIComponentTools(server: McpServer): void {
       name
     }) => {
       try {
-        // Use a longer timeout (60s) for login screen as it loads multiple fonts and creates many elements
+        // Use a longer timeout (90s) for login screen as it loads multiple fonts and creates many elements
         const result = await sendCommandToFigma("create_login_screen", {
           x,
           y,
@@ -623,7 +623,7 @@ export function registerUIComponentTools(server: McpServer): void {
           variant,
           brandColor: brandColor || DESIGN_TOKENS.colors.primary,
           name: name || "Login Screen",
-        }, 60000);
+        }, 90000);
 
         const typedResult = result as { id: string; name: string };
         return {
@@ -662,14 +662,14 @@ export function registerUIComponentTools(server: McpServer): void {
     },
     async ({ html, x = 0, y = 0, width = 1440, name = "HTML Render" }) => {
       try {
-        // Use a longer timeout (60s) for HTML rendering as it can create many elements
+        // Use a longer timeout (90s) for HTML rendering as it can create many elements
         const result = await sendCommandToFigma("render_html", {
           html,
           x,
           y,
           width,
           name,
-        }, 60000);
+        }, 90000);
 
         const typedResult = result as { success: boolean; frameId: string; frameName: string };
 
