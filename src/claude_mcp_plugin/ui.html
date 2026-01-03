@@ -2543,8 +2543,8 @@ var HtmlFigma = (() => {
           // Inject the HTML
           container.innerHTML = html;
 
-          // Wait for any images to load and styles to apply
-          await new Promise(resolve => setTimeout(resolve, 100));
+          // Wait for any images to load and styles to apply (increased from 100ms for better reliability)
+          await new Promise(resolve => setTimeout(resolve, 500));
 
           // Convert to LayerNodes using html-figma
           let layers;
@@ -2594,8 +2594,8 @@ var HtmlFigma = (() => {
           container.innerHTML = html;
           console.log("HTML injected, container children:", container.children.length);
 
-          // Wait for any images to load and styles to apply
-          await new Promise(resolve => setTimeout(resolve, 100));
+          // Wait for any images to load and styles to apply (increased from 100ms for better reliability)
+          await new Promise(resolve => setTimeout(resolve, 500));
 
           // Convert to LayerNodes using html-figma
           let layers;

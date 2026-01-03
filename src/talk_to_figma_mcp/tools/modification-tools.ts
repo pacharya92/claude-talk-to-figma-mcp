@@ -112,21 +112,25 @@ export function registerModificationTools(server: McpServer): void {
   // Move Node Tool
   server.tool(
     "move_node",
-    "Move a node to a new position in Figma",
+    "Move a node to a new position in Figma. By default uses absolute page coordinates. Set relative=true to move by offset from current position.",
     {
       nodeId: z.string().describe("The ID of the node to move"),
-      x: z.number().describe("New X position"),
-      y: z.number().describe("New Y position"),
+      x: z.number().describe("New X position (or X offset if relative=true)"),
+      y: z.number().describe("New Y position (or Y offset if relative=true)"),
+      relative: z.boolean().optional().default(false).describe("If true, x/y are offsets from current position instead of absolute coordinates"),
     },
-    async ({ nodeId, x, y }) => {
+    async ({ nodeId, x, y, relative }) => {
       try {
-        const result = await sendCommandToFigma("move_node", { nodeId, x, y });
-        const typedResult = result as { name: string };
+        const result = await sendCommandToFigma("move_node", { nodeId, x, y, relative });
+        const typedResult = result as { name: string; x: number; y: number; originalX: number; originalY: number; mode: string };
+        const modeText = relative
+          ? `by offset (${x}, ${y}) from (${typedResult.originalX}, ${typedResult.originalY})`
+          : `to absolute position (${x}, ${y})`;
         return {
           content: [
             {
               type: "text",
-              text: `Moved node "${typedResult.name}" to position (${x}, ${y})`,
+              text: `Moved node "${typedResult.name}" ${modeText}. New position: (${typedResult.x}, ${typedResult.y})`,
             },
           ],
         };

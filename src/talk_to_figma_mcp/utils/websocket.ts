@@ -11,6 +11,61 @@ let currentChannel: string | null = null;
 // Map of pending requests for promise tracking
 const pendingRequests = new Map<string, PendingRequest>();
 
+// Connection health tracking
+let lastSuccessfulCommand: number | null = null;
+let lastFailedCommand: number | null = null;
+let consecutiveFailures: number = 0;
+
+/**
+ * Connection health status
+ */
+export interface ConnectionHealth {
+  connected: boolean;
+  channel: string | null;
+  lastSuccessfulCommand: number | null;
+  lastFailedCommand: number | null;
+  consecutiveFailures: number;
+  pendingRequests: number;
+  status: 'healthy' | 'degraded' | 'disconnected';
+  message: string;
+}
+
+/**
+ * Get the current connection health status
+ * @returns ConnectionHealth object with detailed connection information
+ */
+export function getConnectionHealth(): ConnectionHealth {
+  const connected = ws !== null && ws.readyState === WebSocket.OPEN;
+
+  let status: 'healthy' | 'degraded' | 'disconnected';
+  let message: string;
+
+  if (!connected) {
+    status = 'disconnected';
+    message = 'Not connected to Figma. Use join_channel to connect.';
+  } else if (consecutiveFailures >= 3) {
+    status = 'degraded';
+    message = `Connection may be degraded. ${consecutiveFailures} consecutive failures. Consider rejoining the channel.`;
+  } else if (!currentChannel) {
+    status = 'degraded';
+    message = 'Connected but no channel joined. Use join_channel to join a channel.';
+  } else {
+    status = 'healthy';
+    message = `Connected to channel "${currentChannel}". Connection is healthy.`;
+  }
+
+  return {
+    connected,
+    channel: currentChannel,
+    lastSuccessfulCommand,
+    lastFailedCommand,
+    consecutiveFailures,
+    pendingRequests: pendingRequests.size,
+    status,
+    message,
+  };
+}
+
 /**
  * Connects to the Figma server via WebSocket.
  * @param port - Optional port for the connection (defaults to defaultPort from config)
@@ -114,9 +169,13 @@ export function connectToFigma(port: number = defaultPort) {
 
           if (myResponse.error) {
             logger.error(`Error from Figma: ${myResponse.error}`);
+            lastFailedCommand = Date.now();
+            consecutiveFailures++;
             request.reject(new Error(myResponse.error));
           } else {
             if (myResponse.result) {
+              lastSuccessfulCommand = Date.now();
+              consecutiveFailures = 0; // Reset on success
               request.resolve(myResponse.result);
             }
           }
@@ -237,6 +296,8 @@ export function sendCommandToFigma(
     const timeout = setTimeout(() => {
       if (pendingRequests.has(id)) {
         pendingRequests.delete(id);
+        lastFailedCommand = Date.now();
+        consecutiveFailures++;
         logger.error(`Request ${id} to Figma timed out after ${timeoutMs / 1000} seconds`);
         reject(new Error('Request to Figma timed out'));
       }

@@ -252,11 +252,23 @@ async function getDocumentInfo() {
     name: page.name,
     id: page.id,
     type: page.type,
-    children: page.children.map((node) => ({
-      id: node.id,
-      name: node.name,
-      type: node.type,
-    })),
+    children: page.children.map((node) => {
+      const child = {
+        id: node.id,
+        name: node.name,
+        type: node.type,
+      };
+      // Include position and size for frames/shapes to enable safe positioning
+      if ("x" in node) {
+        child.x = node.x;
+        child.y = node.y;
+      }
+      if ("width" in node) {
+        child.width = node.width;
+        child.height = node.height;
+      }
+      return child;
+    }),
     currentPage: {
       id: page.id,
       name: page.name,
@@ -675,7 +687,7 @@ async function setStrokeColor(params) {
 }
 
 async function moveNode(params) {
-  const { nodeId, x, y } = params || {};
+  const { nodeId, x, y, relative = false } = params || {};
 
   if (!nodeId) {
     throw new Error("Missing nodeId parameter");
@@ -694,14 +706,29 @@ async function moveNode(params) {
     throw new Error(`Node does not support position: ${nodeId}`);
   }
 
-  node.x = x;
-  node.y = y;
+  // Store original position for response
+  const originalX = node.x;
+  const originalY = node.y;
+
+  // Apply position based on mode
+  if (relative) {
+    // Relative mode: x/y are offsets from current position
+    node.x = node.x + x;
+    node.y = node.y + y;
+  } else {
+    // Absolute mode: x/y are absolute page coordinates
+    node.x = x;
+    node.y = y;
+  }
 
   return {
     id: node.id,
     name: node.name,
+    originalX: originalX,
+    originalY: originalY,
     x: node.x,
     y: node.y,
+    mode: relative ? "relative" : "absolute",
   };
 }
 
@@ -4035,8 +4062,13 @@ async function createInput(params) {
   container.fills = [];
   container.layoutMode = "VERTICAL";
   container.itemSpacing = 8;
-  container.primaryAxisSizingMode = "AUTO";
-  container.counterAxisSizingMode = "AUTO";
+  // Use FIXED sizing when width is explicitly provided, otherwise AUTO
+  container.primaryAxisSizingMode = width ? "FIXED" : "AUTO";
+  container.counterAxisSizingMode = width ? "FIXED" : "AUTO";
+  if (width) {
+    // Resize container to specified width (height will adjust based on content)
+    container.resize(width, 69); // Default height accommodates label + input
+  }
 
   await figma.loadFontAsync({ family: "Inter", style: "Regular" });
   await figma.loadFontAsync({ family: "Inter", style: "Medium" });
@@ -4605,14 +4637,14 @@ async function renderHtml(params) {
       width: width,
     });
 
-    // Timeout after 30 seconds
+    // Timeout after 90 seconds (increased from 30s for complex HTML)
     timeoutId = setTimeout(() => {
       if (isComplete) return; // Already handled
       isComplete = true;
       figma.ui.off("message", messageHandler);
       safeRemoveFrame();
-      reject(new Error("HTML to Figma conversion timed out"));
-    }, 30000);
+      reject(new Error("HTML to Figma conversion timed out after 90 seconds. Try simplifying the HTML or breaking it into smaller chunks."));
+    }, 90000);
   });
 }
 
