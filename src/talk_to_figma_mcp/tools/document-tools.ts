@@ -359,11 +359,39 @@ export function registerDocumentTools(server: McpServer): void {
     },
     async ({ nodeId, imageUrl, scaleMode }) => {
       try {
-        const result = await sendCommandToFigma("set_image_fill", {
+        // Fetch image on server side to avoid CORS issues in Figma plugin
+        console.log(`Fetching image from: ${imageUrl}`);
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout for fetch
+
+        const response = await fetch(imageUrl, {
+          signal: controller.signal,
+          redirect: 'follow',
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
+        }
+
+        const arrayBuffer = await response.arrayBuffer();
+        if (arrayBuffer.byteLength === 0) {
+          throw new Error("Received empty image data from URL");
+        }
+
+        console.log(`Fetched image: ${arrayBuffer.byteLength} bytes`);
+
+        // Convert to array for JSON serialization
+        const imageBytes = Array.from(new Uint8Array(arrayBuffer));
+
+        // Send directly to Figma plugin as apply_image_fill (bypasses ui.html fetch)
+        const result = await sendCommandToFigma("apply_image_fill", {
           nodeId,
-          imageUrl,
+          imageBytes,
           scaleMode: scaleMode || "FILL",
-        }, 30000); // 30 second timeout for image fetching
+        }, 120000); // 120 second timeout for Figma to process
 
         const typedResult = result as {
           success: boolean;
@@ -382,11 +410,22 @@ export function registerDocumentTools(server: McpServer): void {
           ],
         };
       } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        if (errorMessage.includes('abort')) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Error setting image fill: Image fetch timed out. Try a smaller image or different URL.`,
+              },
+            ],
+          };
+        }
         return {
           content: [
             {
               type: "text",
-              text: `Error setting image fill: ${error instanceof Error ? error.message : String(error)}`,
+              text: `Error setting image fill: ${errorMessage}`,
             },
           ],
         };
