@@ -30,6 +30,8 @@ These tools create complete, styled UI components in a single call:
 |------|-------------|
 | `create_elements` | Batch create up to 100 elements in one call with `nestInFirstFrame` and `groupResult` options |
 | `create_line` | Create lines and arrows with strokeCap options |
+| `create_login_screen` | Create a complete login screen with email, password, buttons, and links |
+| `render_html` | Convert HTML with inline CSS or Tailwind classes directly to Figma elements |
 | `set_gradient_fill` | Apply LINEAR, RADIAL, ANGULAR, or DIAMOND gradients |
 | `set_layer_order` | Control layer order (FRONT, BACK, FORWARD, BACKWARD) |
 | `zoom_to_node` | Focus viewport on a specific element |
@@ -37,6 +39,15 @@ These tools create complete, styled UI components in a single call:
 | `set_viewport` | Set exact viewport position and zoom level |
 | `get_viewport` | Get current viewport state |
 | `select_nodes` | Programmatically select nodes |
+
+### Utility Tools
+
+| Tool | Description |
+|------|-------------|
+| `get_tailwind_color` | Convert Tailwind class (e.g., "bg-gray-50") to Figma RGB values |
+| `hex_to_figma_color` | Convert hex color code to Figma RGBA format |
+| `search_tailwind_colors` | Search for Tailwind colors by name |
+| `check_connection` | Diagnose connection health (healthy/degraded/disconnected) |
 
 ### Project Enhancements
 
@@ -317,8 +328,15 @@ src/
 
 ## 📋 Version History
 
-### Current: 0.6.1
-- **🔧 Tool Fix**: The `set_stroke_color` tool now correctly accepts a `strokeWeight` of `0` for creating invisible strokes.
+### Current: 0.6.2
+- **Input Component Fix**: The `create_input` width parameter now works correctly for both container AND inner Input Field frames
+- **Coordinate Improvements**: `get_document_info` now returns x, y, width, height for all frames
+- **Timeout Increase**: `render_html` timeout increased from 30s to 90s for complex HTML rendering
+- **Tailwind Color Utilities**: New tools `get_tailwind_color`, `hex_to_figma_color`, and `search_tailwind_colors` for color conversion
+- **Connection Diagnostics**: New `check_connection` tool to diagnose connection health (healthy/degraded/disconnected)
+
+### Previous: 0.6.1
+- **Tool Fix**: The `set_stroke_color` tool now correctly accepts a `strokeWeight` of `0` for creating invisible strokes.
 
 ### Previous: 0.6.0
 - **🚀 DXT Package Support**: one-click installation via Claude Desktop's extension manager (Thanks to [Taylor Smits](https://github.com/smitstay) - [PR #17](https://github.com/arinspunk/claude-talk-to-figma-mcp/pull/17))
