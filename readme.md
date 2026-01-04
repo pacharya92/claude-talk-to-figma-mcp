@@ -39,6 +39,7 @@ These tools create complete, styled UI components in a single call:
 | `set_viewport` | Set exact viewport position and zoom level |
 | `get_viewport` | Get current viewport state |
 | `select_nodes` | Programmatically select nodes |
+| `split_frames_to_pages` | Split top-level frames into separate pages (preserves comments when moving) |
 
 ### Utility Tools
 
@@ -209,6 +210,97 @@ Claude Desktop ↔ MCP Server ↔ WebSocket Server ↔ Figma Plugin
 | `get_local_components` | Project components | Design system audit |
 | `get_remote_components` | Team libraries | Shared component access |
 | `create_component_instance` | Use components | Consistent UI elements |
+
+### 📑 Page Organization Tools
+| Command | Purpose | Example Use |
+|---------|---------|-------------|
+| `split_frames_to_pages` | Split frames to pages | Organize prototyping hub |
+| `create_page` | Create new page | Project structure |
+| `get_pages` | List all pages | Page navigation |
+| `set_current_page` | Switch active page | Page context |
+| `delete_page` | Remove page | Cleanup |
+
+#### split_frames_to_pages
+
+Split top-level frames from the current page into separate pages. Ideal for reorganizing prototyping hubs where multiple wireframes exist on a single page.
+
+**Why Use This?**
+- Moving frames within the same file **preserves comments** pinned to layers
+- Copy/paste or duplicate operations can detach comments
+- Automates tedious manual page creation and frame moving
+
+**Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `source` | `"currentPage"` \| `"pageId"` | `"currentPage"` | Source page |
+| `sourcePageId` | string | - | Page ID (when source is "pageId") |
+| `frameQuery` | `"topLevelFrames"` \| `"selectionOnly"` \| `"byNameRegex"` | `"topLevelFrames"` | Which frames to process |
+| `nameRegex` | string | - | Regex pattern (for "byNameRegex") |
+| `mode` | `"move"` \| `"copy"` | `"move"` | Move preserves comments |
+| `pageName.strategy` | `"frameName"` \| `"prefix+frameName"` \| `"numbered"` | `"frameName"` | Page naming |
+| `pageName.prefix` | string | `""` | Optional prefix |
+| `pageName.suffix` | string | `""` | Optional suffix |
+| `positioning` | `"preserve"` \| `"normalize"` | `"preserve"` | Frame coordinates |
+| `normalizeMargin` | `{x, y}` | `{x: 64, y: 64}` | Margins for normalize |
+| `sort` | `"canvasReadingOrder"` \| `"layerOrder"` | `"layerOrder"` | Page creation order |
+| `dryRun` | boolean | `false` | Preview without changes |
+
+**Examples:**
+
+```javascript
+// Basic: Split all top-level frames to pages (default settings)
+split_frames_to_pages({})
+
+// Move only selected frames
+split_frames_to_pages({
+  frameQuery: "selectionOnly"
+})
+
+// Split frames matching a pattern (e.g., all "Screen - *" frames)
+split_frames_to_pages({
+  frameQuery: "byNameRegex",
+  nameRegex: "^Screen - "
+})
+
+// Copy instead of move (keep originals)
+split_frames_to_pages({
+  mode: "copy"
+})
+
+// Add prefix and suffix to page names
+split_frames_to_pages({
+  pageName: {
+    strategy: "prefix+frameName",
+    prefix: "v2 - ",
+    suffix: " (Final)"
+  }
+})
+
+// Numbered pages with prefix
+split_frames_to_pages({
+  pageName: {
+    strategy: "numbered",
+    prefix: "Page "
+  }
+})
+
+// Normalize all frames to start at (64, 64)
+split_frames_to_pages({
+  positioning: "normalize",
+  normalizeMargin: { x: 64, y: 64 }
+})
+
+// Sort by canvas reading order (top-left to bottom-right)
+split_frames_to_pages({
+  sort: "canvasReadingOrder"
+})
+
+// Preview what would happen without making changes
+split_frames_to_pages({
+  dryRun: true
+})
+```
 
 ---
 

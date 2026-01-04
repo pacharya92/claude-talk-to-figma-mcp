@@ -440,4 +440,225 @@ export function registerAdvancedTools(server: McpServer): void {
       }
     }
   );
+
+  // ============================================
+  // PAGE ORGANIZATION TOOLS
+  // ============================================
+
+  server.tool(
+    "split_frames_to_pages",
+    "Split top-level frames from the current page into separate pages. Useful for reorganizing prototyping hubs where multiple wireframes exist on a single page. Moving frames within the same file preserves comments.",
+    {
+      source: z.enum(["currentPage", "pageId"]).optional()
+        .describe("Source page to get frames from. Defaults to 'currentPage'"),
+      sourcePageId: z.string().optional()
+        .describe("If source is 'pageId', the ID of the page to get frames from"),
+      frameQuery: z.enum(["topLevelFrames", "selectionOnly", "byNameRegex"]).optional()
+        .describe("Which frames to process. Defaults to 'topLevelFrames'"),
+      nameRegex: z.string().optional()
+        .describe("If frameQuery is 'byNameRegex', the regex pattern to match frame names"),
+      mode: z.enum(["move", "copy"]).optional()
+        .describe("Whether to move or copy frames. 'move' preserves comments. Defaults to 'move'"),
+      pageName: z.object({
+        strategy: z.enum(["frameName", "prefix+frameName", "numbered"]).optional()
+          .describe("How to name new pages. Defaults to 'frameName'"),
+        prefix: z.string().optional()
+          .describe("Prefix for page names (used with 'prefix+frameName')"),
+        suffix: z.string().optional()
+          .describe("Suffix for page names"),
+      }).optional().describe("Page naming configuration"),
+      positioning: z.enum(["preserve", "normalize"]).optional()
+        .describe("Whether to preserve original coordinates or normalize to a margin. Defaults to 'preserve'"),
+      normalizeMargin: z.object({
+        x: z.number().optional().describe("X margin when normalizing. Defaults to 64"),
+        y: z.number().optional().describe("Y margin when normalizing. Defaults to 64"),
+      }).optional().describe("Margin values when positioning is 'normalize'"),
+      sort: z.enum(["canvasReadingOrder", "layerOrder"]).optional()
+        .describe("How to order page creation. 'canvasReadingOrder' sorts by y then x. Defaults to 'layerOrder'"),
+      dryRun: z.boolean().optional()
+        .describe("If true, report what would happen without making changes. Defaults to false"),
+    },
+    async (params) => {
+      try {
+        const result = await sendCommandToFigma("split_frames_to_pages", {
+          source: params.source || "currentPage",
+          sourcePageId: params.sourcePageId,
+          frameQuery: params.frameQuery || "topLevelFrames",
+          nameRegex: params.nameRegex,
+          mode: params.mode || "move",
+          pageName: {
+            strategy: params.pageName?.strategy || "frameName",
+            prefix: params.pageName?.prefix || "",
+            suffix: params.pageName?.suffix || "",
+          },
+          positioning: params.positioning || "preserve",
+          normalizeMargin: {
+            x: params.normalizeMargin?.x ?? 64,
+            y: params.normalizeMargin?.y ?? 64,
+          },
+          sort: params.sort || "layerOrder",
+          dryRun: params.dryRun || false,
+        });
+
+        const typedResult = result as {
+          success: boolean;
+          dryRun: boolean;
+          pagesCreated: number;
+          framesMoved: number;
+          framesCopied: number;
+          framesSkipped: number;
+          ignoredNonFrames: number;
+          warnings: string[];
+          pages: Array<{
+            pageId: string;
+            pageName: string;
+            frameId: string;
+            frameName: string;
+            operation: "moved" | "copied";
+          }>;
+        };
+
+        // Build result message
+        let message = "";
+
+        if (typedResult.dryRun) {
+          message = `[DRY RUN] Would create ${typedResult.pagesCreated} page(s):\n`;
+        } else {
+          message = `Successfully created ${typedResult.pagesCreated} page(s):\n`;
+        }
+
+        if (typedResult.framesMoved > 0) {
+          message += `- ${typedResult.framesMoved} frame(s) moved\n`;
+        }
+        if (typedResult.framesCopied > 0) {
+          message += `- ${typedResult.framesCopied} frame(s) copied\n`;
+        }
+        if (typedResult.framesSkipped > 0) {
+          message += `- ${typedResult.framesSkipped} frame(s) skipped\n`;
+        }
+        if (typedResult.ignoredNonFrames > 0) {
+          message += `- ${typedResult.ignoredNonFrames} non-frame element(s) ignored\n`;
+        }
+
+        if (typedResult.pages.length > 0) {
+          message += "\nPages:\n";
+          message += typedResult.pages
+            .map(p => `- "${p.pageName}" ← ${p.operation} "${p.frameName}" (${p.frameId})`)
+            .join("\n");
+        }
+
+        if (typedResult.warnings.length > 0) {
+          message += "\n\nWarnings:\n";
+          message += typedResult.warnings.map(w => `⚠️ ${w}`).join("\n");
+        }
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: message,
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Error splitting frames to pages: ${error instanceof Error ? error.message : String(error)}`,
+            },
+          ],
+        };
+      }
+    }
+  );
+
+  server.tool(
+    "move_frames_to_page",
+    "Move multiple frames to a single new or existing page. Use this to consolidate frames onto one page (unlike split_frames_to_pages which creates one page per frame).",
+    {
+      frameIds: z.array(z.string()).optional()
+        .describe("Array of frame IDs to move. If not provided, uses current selection."),
+      targetPageId: z.string().optional()
+        .describe("ID of existing page to move frames to. If not provided, creates a new page."),
+      newPageName: z.string().optional()
+        .describe("Name for the new page (required if targetPageId not provided). Defaults to 'New Page'."),
+      positioning: z.enum(["preserve", "arrange"]).optional()
+        .describe("'preserve' keeps original coords, 'arrange' lays out frames in a grid. Defaults to 'preserve'."),
+      arrangeOptions: z.object({
+        columns: z.number().optional().describe("Number of columns for grid layout. Defaults to 3."),
+        spacing: z.number().optional().describe("Spacing between frames. Defaults to 100."),
+        startX: z.number().optional().describe("Starting X position. Defaults to 0."),
+        startY: z.number().optional().describe("Starting Y position. Defaults to 0."),
+      }).optional().describe("Options for 'arrange' positioning."),
+      switchToPage: z.boolean().optional()
+        .describe("Whether to switch to the target page after moving. Defaults to true."),
+    },
+    async (params) => {
+      try {
+        const result = await sendCommandToFigma("move_frames_to_page", {
+          frameIds: params.frameIds,
+          targetPageId: params.targetPageId,
+          newPageName: params.newPageName || "New Page",
+          positioning: params.positioning || "preserve",
+          arrangeOptions: {
+            columns: params.arrangeOptions?.columns ?? 3,
+            spacing: params.arrangeOptions?.spacing ?? 100,
+            startX: params.arrangeOptions?.startX ?? 0,
+            startY: params.arrangeOptions?.startY ?? 0,
+          },
+          switchToPage: params.switchToPage ?? true,
+        });
+
+        const typedResult = result as {
+          success: boolean;
+          pageId: string;
+          pageName: string;
+          pageCreated: boolean;
+          framesMoved: number;
+          framesSkipped: number;
+          ignoredNonFrames: number;
+          frames: Array<{ id: string; name: string }>;
+          warnings: string[];
+        };
+
+        let message = "";
+        if (typedResult.pageCreated) {
+          message = `Created new page "${typedResult.pageName}" and moved ${typedResult.framesMoved} frame(s).\n`;
+        } else {
+          message = `Moved ${typedResult.framesMoved} frame(s) to existing page "${typedResult.pageName}".\n`;
+        }
+
+        if (typedResult.framesSkipped > 0) {
+          message += `- ${typedResult.framesSkipped} frame(s) skipped\n`;
+        }
+        if (typedResult.ignoredNonFrames > 0) {
+          message += `- ${typedResult.ignoredNonFrames} non-frame element(s) ignored\n`;
+        }
+
+        if (typedResult.frames.length > 0) {
+          message += "\nFrames moved:\n";
+          message += typedResult.frames.map(f => `- ${f.name} (${f.id})`).join("\n");
+        }
+
+        if (typedResult.warnings.length > 0) {
+          message += "\n\nWarnings:\n";
+          message += typedResult.warnings.map(w => `⚠️ ${w}`).join("\n");
+        }
+
+        return {
+          content: [{ type: "text", text: message }],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Error moving frames to page: ${error instanceof Error ? error.message : String(error)}`,
+            },
+          ],
+        };
+      }
+    }
+  );
 }

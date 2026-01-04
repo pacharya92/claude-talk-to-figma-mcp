@@ -236,6 +236,11 @@ async function handleCommand(command, params) {
     // Image fill command (receives pre-fetched image bytes from UI)
     case "apply_image_fill":
       return await applyImageFill(params);
+    // Page organization tools
+    case "split_frames_to_pages":
+      return await splitFramesToPages(params);
+    case "move_frames_to_page":
+      return await moveFramesToPage(params);
     default:
       throw new Error(`Unknown command: ${command}`);
   }
@@ -4889,4 +4894,552 @@ async function applyImageFill(params) {
   } catch (error) {
     throw new Error(`Failed to apply image fill: ${error.message}`);
   }
+}
+
+// ============================================
+// PAGE ORGANIZATION TOOLS
+// ============================================
+
+/**
+ * Helper: Sort frames by canvas reading order (top-to-bottom, left-to-right)
+ * @param {Array} frames - Array of frame nodes
+ * @returns {Array} Sorted frames
+ */
+function sortFramesByCanvasReadingOrder(frames) {
+  return [...frames].sort((a, b) => {
+    // First compare by y position (top to bottom)
+    if (Math.abs(a.y - b.y) > 10) {
+      return a.y - b.y;
+    }
+    // If roughly same y, compare by x (left to right)
+    return a.x - b.x;
+  });
+}
+
+/**
+ * Helper: Generate unique page name by appending (2), (3), etc. if name already exists
+ * @param {string} baseName - The desired page name
+ * @param {Set} existingNames - Set of existing page names
+ * @returns {string} A unique page name
+ */
+function generateUniquePageName(baseName, existingNames) {
+  if (!existingNames.has(baseName)) {
+    return baseName;
+  }
+
+  let counter = 2;
+  let uniqueName = `${baseName} (${counter})`;
+
+  while (existingNames.has(uniqueName)) {
+    counter++;
+    uniqueName = `${baseName} (${counter})`;
+  }
+
+  return uniqueName;
+}
+
+/**
+ * Split frames from a page into separate pages
+ * @param {Object} params - Configuration parameters
+ * @returns {Object} Result with statistics and created pages info
+ */
+async function splitFramesToPages(params) {
+  const {
+    source = "currentPage",
+    sourcePageId,
+    frameQuery = "topLevelFrames",
+    nameRegex,
+    mode = "move",
+    pageName = {},
+    positioning = "preserve",
+    normalizeMargin = { x: 64, y: 64 },
+    sort = "layerOrder",
+    dryRun = false
+  } = params || {};
+
+  const { strategy = "frameName", prefix = "", suffix = "" } = pageName;
+
+  // Get the source page
+  let sourcePage;
+  if (source === "pageId" && sourcePageId) {
+    const node = await figma.getNodeByIdAsync(sourcePageId);
+    if (!node || node.type !== "PAGE") {
+      throw new Error(`Invalid source page ID: ${sourcePageId}`);
+    }
+    sourcePage = node;
+  } else {
+    sourcePage = figma.currentPage;
+  }
+
+  // Collect frames based on frameQuery
+  let framesToProcess = [];
+  let ignoredNonFrames = 0;
+
+  if (frameQuery === "selectionOnly") {
+    // Only process selected frames
+    const selection = figma.currentPage.selection;
+    for (const node of selection) {
+      if (node.type === "FRAME") {
+        framesToProcess.push(node);
+      } else {
+        ignoredNonFrames++;
+      }
+    }
+  } else if (frameQuery === "byNameRegex" && nameRegex) {
+    // Filter top-level frames by name regex
+    const regex = new RegExp(nameRegex);
+    for (const child of sourcePage.children) {
+      if (child.type === "FRAME") {
+        if (regex.test(child.name)) {
+          framesToProcess.push(child);
+        }
+      } else {
+        // Count non-frames as ignored only if they're top-level
+        ignoredNonFrames++;
+      }
+    }
+  } else {
+    // Default: topLevelFrames - all top-level frames
+    for (const child of sourcePage.children) {
+      if (child.type === "FRAME") {
+        framesToProcess.push(child);
+      } else {
+        ignoredNonFrames++;
+      }
+    }
+  }
+
+  // Check if we have frames to process
+  if (framesToProcess.length === 0) {
+    return {
+      success: true,
+      dryRun,
+      pagesCreated: 0,
+      framesMoved: 0,
+      framesCopied: 0,
+      framesSkipped: 0,
+      ignoredNonFrames,
+      warnings: ["No frames found matching the query criteria."],
+      pages: []
+    };
+  }
+
+  // Sort frames based on sort option
+  if (sort === "canvasReadingOrder") {
+    framesToProcess = sortFramesByCanvasReadingOrder(framesToProcess);
+  }
+  // If layerOrder, keep the order from sourcePage.children (already done)
+
+  // Collect existing page names to avoid duplicates
+  const existingPageNames = new Set();
+  for (const page of figma.root.children) {
+    existingPageNames.add(page.name);
+  }
+
+  // Process each frame
+  const results = [];
+  const warnings = [];
+  let framesMoved = 0;
+  let framesCopied = 0;
+  let framesSkipped = 0;
+
+  for (let i = 0; i < framesToProcess.length; i++) {
+    const frame = framesToProcess[i];
+
+    // Generate page name based on strategy
+    let targetPageName;
+    switch (strategy) {
+      case "numbered":
+        targetPageName = `${prefix}${i + 1}${suffix}`;
+        break;
+      case "prefix+frameName":
+        targetPageName = `${prefix}${frame.name}${suffix}`;
+        break;
+      case "frameName":
+      default:
+        targetPageName = `${prefix}${frame.name}${suffix}`;
+        break;
+    }
+
+    // Ensure unique page name
+    const uniquePageName = generateUniquePageName(targetPageName, existingPageNames);
+
+    if (uniquePageName !== targetPageName) {
+      warnings.push(`Page name "${targetPageName}" already exists, using "${uniquePageName}" instead.`);
+    }
+
+    // Add to existing names set for future uniqueness checks
+    existingPageNames.add(uniquePageName);
+
+    if (dryRun) {
+      // Just record what would happen
+      results.push({
+        pageId: "(dry-run)",
+        pageName: uniquePageName,
+        frameId: frame.id,
+        frameName: frame.name,
+        operation: mode === "move" ? "moved" : "copied"
+      });
+
+      if (mode === "move") {
+        framesMoved++;
+      } else {
+        framesCopied++;
+      }
+      continue;
+    }
+
+    try {
+      // Create new page
+      const newPage = figma.createPage();
+      newPage.name = uniquePageName;
+
+      // Move or copy the frame
+      let targetFrame;
+      if (mode === "copy") {
+        targetFrame = frame.clone();
+        framesCopied++;
+      } else {
+        targetFrame = frame;
+        framesMoved++;
+      }
+
+      // Set the frame's parent to the new page (this moves/copies it)
+      newPage.appendChild(targetFrame);
+
+      // Handle positioning
+      if (positioning === "normalize") {
+        targetFrame.x = normalizeMargin.x || 64;
+        targetFrame.y = normalizeMargin.y || 64;
+      }
+      // If "preserve", coordinates stay as-is
+
+      results.push({
+        pageId: newPage.id,
+        pageName: newPage.name,
+        frameId: targetFrame.id,
+        frameName: frame.name,
+        operation: mode === "move" ? "moved" : "copied"
+      });
+    } catch (error) {
+      warnings.push(`Failed to process frame "${frame.name}": ${error.message}`);
+      framesSkipped++;
+    }
+  }
+
+  // If we created pages and not in dry run, optionally focus on the first created page
+  if (!dryRun && results.length > 0) {
+    try {
+      const firstNewPage = await figma.getNodeByIdAsync(results[0].pageId);
+      if (firstNewPage && firstNewPage.type === "PAGE") {
+        figma.currentPage = firstNewPage;
+
+        // Zoom to fit the frame if it exists
+        const frame = await figma.getNodeByIdAsync(results[0].frameId);
+        if (frame) {
+          figma.viewport.scrollAndZoomIntoView([frame]);
+        }
+      }
+    } catch (e) {
+      // Ignore viewport focus errors
+      warnings.push("Could not focus on the first created page.");
+    }
+  }
+
+  return {
+    success: true,
+    dryRun,
+    pagesCreated: results.length,
+    framesMoved,
+    framesCopied,
+    framesSkipped,
+    ignoredNonFrames,
+    warnings,
+    pages: results
+  };
+}
+
+/**
+ * Move multiple frames to a single page (new or existing)
+ * @param {Object} params - Configuration parameters
+ * @returns {Object} Result with statistics
+ */
+async function moveFramesToPage(params) {
+  const {
+    frameIds,
+    targetPageId,
+    newPageName = "New Page",
+    positioning = "preserve",
+    arrangeOptions = {},
+    switchToPage = true,
+    commandId = generateCommandId()
+  } = params || {};
+
+  const {
+    columns = 3,
+    spacing = 100,
+    startX = 0,
+    startY = 0
+  } = arrangeOptions;
+
+  const warnings = [];
+  let framesToMove = [];
+  let ignoredNonFrames = 0;
+
+  // Send started progress update
+  sendProgressUpdate(
+    commandId,
+    'move_frames_to_page',
+    'started',
+    0,
+    0,
+    0,
+    'Starting to collect frames to move...',
+    null
+  );
+
+  // Get frames to move - either from frameIds or current selection
+  if (frameIds && Array.isArray(frameIds) && frameIds.length > 0) {
+    for (const id of frameIds) {
+      const node = await figma.getNodeByIdAsync(id);
+      if (node) {
+        if (node.type === "FRAME") {
+          framesToMove.push(node);
+        } else {
+          ignoredNonFrames++;
+        }
+      } else {
+        warnings.push(`Node not found: ${id}`);
+      }
+    }
+  } else {
+    // Use current selection
+    const selection = figma.currentPage.selection;
+    for (const node of selection) {
+      if (node.type === "FRAME") {
+        framesToMove.push(node);
+      } else {
+        ignoredNonFrames++;
+      }
+    }
+  }
+
+  if (framesToMove.length === 0) {
+    sendProgressUpdate(
+      commandId,
+      'move_frames_to_page',
+      'error',
+      0,
+      0,
+      0,
+      'No frames to move. Select frames or provide frameIds.',
+      null
+    );
+    return {
+      success: false,
+      pageId: null,
+      pageName: null,
+      pageCreated: false,
+      framesMoved: 0,
+      framesSkipped: 0,
+      ignoredNonFrames,
+      frames: [],
+      warnings: ["No frames to move. Select frames or provide frameIds."]
+    };
+  }
+
+  // Send progress update with frame count
+  sendProgressUpdate(
+    commandId,
+    'move_frames_to_page',
+    'in_progress',
+    10,
+    framesToMove.length,
+    0,
+    `Found ${framesToMove.length} frame(s) to move`,
+    null
+  );
+
+  // Get or create target page
+  let targetPage;
+  let pageCreated = false;
+
+  if (targetPageId) {
+    const node = await figma.getNodeByIdAsync(targetPageId);
+    if (!node || node.type !== "PAGE") {
+      sendProgressUpdate(
+        commandId,
+        'move_frames_to_page',
+        'error',
+        10,
+        framesToMove.length,
+        0,
+        `Invalid target page ID: ${targetPageId}`,
+        null
+      );
+      throw new Error(`Invalid target page ID: ${targetPageId}`);
+    }
+    targetPage = node;
+    sendProgressUpdate(
+      commandId,
+      'move_frames_to_page',
+      'in_progress',
+      20,
+      framesToMove.length,
+      0,
+      `Using existing page: "${targetPage.name}"`,
+      null
+    );
+  } else {
+    // Create new page
+    targetPage = figma.createPage();
+    targetPage.name = newPageName;
+    pageCreated = true;
+    sendProgressUpdate(
+      commandId,
+      'move_frames_to_page',
+      'in_progress',
+      20,
+      framesToMove.length,
+      0,
+      `Created new page: "${newPageName}"`,
+      null
+    );
+  }
+
+  // Move frames to target page
+  const movedFrames = [];
+  let framesSkipped = 0;
+
+  // Sort frames for consistent arrangement (top-left to bottom-right)
+  if (positioning === "arrange") {
+    framesToMove.sort((a, b) => {
+      if (Math.abs(a.y - b.y) > 10) return a.y - b.y;
+      return a.x - b.x;
+    });
+  }
+
+  for (let i = 0; i < framesToMove.length; i++) {
+    const frame = framesToMove[i];
+
+    // Send progress for each frame being moved
+    const progressPercent = 20 + Math.round((i / framesToMove.length) * 60);
+    sendProgressUpdate(
+      commandId,
+      'move_frames_to_page',
+      'in_progress',
+      progressPercent,
+      framesToMove.length,
+      i,
+      `Moving frame ${i + 1}/${framesToMove.length}: "${frame.name}"`,
+      null
+    );
+
+    try {
+      // Move frame to target page
+      targetPage.appendChild(frame);
+
+      // Handle positioning
+      if (positioning === "arrange") {
+        const col = i % columns;
+        const row = Math.floor(i / columns);
+
+        // Calculate position based on previous frames in same row/column
+        let xPos = startX;
+        let yPos = startY;
+
+        // Simple grid: accumulate widths for x, max heights for y
+        for (let c = 0; c < col; c++) {
+          const prevFrame = framesToMove[row * columns + c];
+          if (prevFrame) {
+            xPos += prevFrame.width + spacing;
+          }
+        }
+
+        for (let r = 0; r < row; r++) {
+          // Find max height in this row
+          let maxHeight = 0;
+          for (let c = 0; c < columns && (r * columns + c) < framesToMove.length; c++) {
+            const prevFrame = framesToMove[r * columns + c];
+            if (prevFrame && prevFrame.height > maxHeight) {
+              maxHeight = prevFrame.height;
+            }
+          }
+          yPos += maxHeight + spacing;
+        }
+
+        frame.x = xPos;
+        frame.y = yPos;
+      }
+      // If "preserve", keep original coordinates (already done by appendChild)
+
+      movedFrames.push({
+        id: frame.id,
+        name: frame.name
+      });
+    } catch (error) {
+      warnings.push(`Failed to move frame "${frame.name}": ${error.message}`);
+      framesSkipped++;
+    }
+  }
+
+  // Send progress update for switching page
+  sendProgressUpdate(
+    commandId,
+    'move_frames_to_page',
+    'in_progress',
+    90,
+    framesToMove.length,
+    movedFrames.length,
+    'Switching to target page...',
+    null
+  );
+
+  // Switch to target page and zoom to content
+  if (switchToPage && movedFrames.length > 0) {
+    figma.currentPage = targetPage;
+
+    // Zoom to fit all moved frames
+    const nodesToFit = [];
+    for (const f of movedFrames) {
+      const node = await figma.getNodeByIdAsync(f.id);
+      if (node) nodesToFit.push(node);
+    }
+    if (nodesToFit.length > 0) {
+      figma.viewport.scrollAndZoomIntoView(nodesToFit);
+    }
+  }
+
+  // Send completed progress update
+  const resultMessage = pageCreated
+    ? `Created new page "${targetPage.name}" and moved ${movedFrames.length} frame(s)`
+    : `Moved ${movedFrames.length} frame(s) to "${targetPage.name}"`;
+
+  sendProgressUpdate(
+    commandId,
+    'move_frames_to_page',
+    'completed',
+    100,
+    framesToMove.length,
+    movedFrames.length,
+    resultMessage,
+    {
+      pageId: targetPage.id,
+      pageName: targetPage.name,
+      framesMoved: movedFrames.length,
+      frames: movedFrames
+    }
+  );
+
+  return {
+    success: true,
+    pageId: targetPage.id,
+    pageName: targetPage.name,
+    pageCreated,
+    framesMoved: movedFrames.length,
+    framesSkipped,
+    ignoredNonFrames,
+    frames: movedFrames,
+    warnings
+  };
 }
