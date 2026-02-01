@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { sendCommandToFigma, joinChannel } from "../utils/websocket.js";
+import { sendCommandToFigma } from "../utils/websocket.js";
 import { filterFigmaNode } from "../utils/figma-helpers.js";
 
 /**
@@ -289,55 +289,6 @@ export function registerDocumentTools(server: McpServer): void {
             {
               type: "text",
               text: `Error scanning text nodes: ${error instanceof Error ? error.message : String(error)}`,
-            },
-          ],
-        };
-      }
-    }
-  );
-
-  // Join Channel Tool
-  server.tool(
-    "join_channel",
-    "Join a specific channel to communicate with Figma",
-    {
-      channel: z.string().describe("The name of the channel to join").default(""),
-    },
-    async ({ channel }) => {
-      try {
-        if (!channel) {
-          // If no channel provided, ask the user for input
-          return {
-            content: [
-              {
-                type: "text",
-                text: "Please provide a channel name to join:",
-              },
-            ],
-            followUp: {
-              tool: "join_channel",
-              description: "Join the specified channel",
-            },
-          };
-        }
-
-        // Use joinChannel instead of sendCommandToFigma to ensure currentChannel is updated
-        await joinChannel(channel);
-        
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Successfully joined channel: ${channel}`,
-            },
-          ],
-        };
-      } catch (error) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Error joining channel: ${error instanceof Error ? error.message : String(error)}`,
             },
           ],
         };

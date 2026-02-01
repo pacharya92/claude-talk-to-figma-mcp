@@ -4,34 +4,32 @@ import { registerCreationTools } from "./creation-tools";
 import { registerModificationTools } from "./modification-tools";
 import { registerTextTools } from "./text-tools";
 import { registerComponentTools } from "./component-tools";
-import { registerAdvancedTools } from "./advanced-tools";
-import { registerUIComponentTools } from "./ui-component-tools";
-import { registerUtilityTools } from "./utility-tools";
+import { registerConnectionTools } from "./connection-tools";
 
 /**
- * Register all Figma tools to the MCP server
+ * Register core Figma tools to the MCP server.
+ * Only the core categories are registered here to stay within
+ * the per-server tool limit (~43 tools).
+ *
+ * Extended tools (advanced, ui-component, utility, navigation)
+ * are registered in a separate server via index-extended.ts.
+ *
  * @param server - The MCP server instance
  */
 export function registerTools(server: McpServer): void {
-  // Register all tool categories
+  registerConnectionTools(server);
   registerDocumentTools(server);
   registerCreationTools(server);
   registerModificationTools(server);
   registerTextTools(server);
   registerComponentTools(server);
-  registerAdvancedTools(server);
-  registerUIComponentTools(server);
-  registerUtilityTools(server);
 }
 
-// Export all tool registration functions for individual usage if needed
 export {
+  registerConnectionTools,
   registerDocumentTools,
   registerCreationTools,
   registerModificationTools,
   registerTextTools,
   registerComponentTools,
-  registerAdvancedTools,
-  registerUIComponentTools,
-  registerUtilityTools
 };

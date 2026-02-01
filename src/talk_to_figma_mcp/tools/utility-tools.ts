@@ -8,8 +8,6 @@ import {
   getAvailableColors,
   FigmaColor
 } from "../utils/tailwind-colors";
-import { getConnectionHealth, sendCommandToFigma } from "../utils/websocket";
-
 /**
  * Register utility tools for color conversion and helpers
  * @param server - The MCP server instance
@@ -137,59 +135,6 @@ export function registerUtilityTools(server: McpServer): void {
           {
             type: "text",
             text: `Found ${matches.length} colors matching "${query}":\n\n${output}${matches.length > 20 ? `\n\n... and ${matches.length - 20} more` : ''}`,
-          },
-        ],
-      };
-    }
-  );
-
-  // Check Connection Health Tool
-  server.tool(
-    "check_connection",
-    "Check the health of the connection to Figma. Use this to diagnose issues when operations are failing.",
-    {},
-    async () => {
-      const health = getConnectionHealth();
-
-      // Format the health status
-      const statusEmoji = health.status === 'healthy' ? '✅' :
-                          health.status === 'degraded' ? '⚠️' : '❌';
-
-      let output = `${statusEmoji} Connection Status: ${health.status.toUpperCase()}\n\n`;
-      output += `${health.message}\n\n`;
-      output += `Details:\n`;
-      output += `- Connected: ${health.connected}\n`;
-      output += `- Channel: ${health.channel || 'None'}\n`;
-      output += `- Pending requests: ${health.pendingRequests}\n`;
-      output += `- Consecutive failures: ${health.consecutiveFailures}\n`;
-
-      if (health.lastSuccessfulCommand) {
-        const secondsAgo = Math.round((Date.now() - health.lastSuccessfulCommand) / 1000);
-        output += `- Last successful command: ${secondsAgo}s ago\n`;
-      }
-
-      if (health.lastFailedCommand) {
-        const secondsAgo = Math.round((Date.now() - health.lastFailedCommand) / 1000);
-        output += `- Last failed command: ${secondsAgo}s ago\n`;
-      }
-
-      // If degraded, try a quick health check
-      if (health.status === 'degraded' && health.connected && health.channel) {
-        output += '\nAttempting health check...\n';
-        try {
-          await sendCommandToFigma("get_document_info", {}, 5000);
-          output += '✅ Health check passed! Connection seems to be working now.';
-        } catch (error) {
-          output += `❌ Health check failed: ${error instanceof Error ? error.message : String(error)}\n`;
-          output += '\nRecommendation: Restart the Figma plugin and use join_channel with a new channel ID.';
-        }
-      }
-
-      return {
-        content: [
-          {
-            type: "text",
-            text: output,
           },
         ],
       };
